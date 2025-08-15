@@ -1,0 +1,16 @@
+[package]
+name = "core"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# serialization and deserialization usin Rusts's trait system
+serde = { version = "1.0", features = ["derive"] }
+# async sql toolkit which can leverage tokio and supports multiple databases
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "mysql", "chrono"] }
+# date and time library
+chrono = { version = "0.4", features = ["serde"] }
+# loads environment variables from a .env file
+dotenvy = "0.15"
+# provides robust error handling
+anyhow = "1.0"
