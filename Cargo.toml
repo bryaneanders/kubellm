@@ -1,8 +1,9 @@
 [workspace]
 members = [
     #"api"#,
-    "core"#,
-    #"cli",
-    #"worker"
+    "core",
+    "cli"#,
+    #"worker",
+    #"webapp"
 ]
 resolver = "2"

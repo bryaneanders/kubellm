@@ -1,0 +1,18 @@
+[package]
+name = "cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "message-cli"
+path = "src/main.rs"
+
+[dependencies]
+# import the core library
+core = { path = "../core" }
+# command line argument parser
+clap = { version = "4.0", features = ["derive"] }
+# include all of tokio for async operations
+tokio = { version = "1.0", features = ["full"] }
+# error handling
+anyhow = "1.0"
