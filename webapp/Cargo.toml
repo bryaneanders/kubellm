@@ -1,0 +1,23 @@
+[package]
+name = "message-webapp"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+# import the core library
+core = { path = "../core" }
+# web application framework
+axum = "0.7"
+# async, non-blocking io
+tokio = { version = "1.0", features = ["full"] }
+# async sql toolkit which can leverage tokio and supports multiple databases
+sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "mysql"] }
+# components for network clients and servers
+# uses Service trait to create async functions that take requests and return responses
+tower = "0.4"
+# http middleware for tower
+tower-http = { version = "0.5", features = ["cors", "fs"] }
+# provides robust error handling
+anyhow = "1.0"
+# serialize and deserialize json
+serde_json = "1.0"

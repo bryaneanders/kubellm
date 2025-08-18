@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>All Messages - Message Saver</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        h1 {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .nav-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 2rem;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .messages-container {
+            display: none;
+        }
+
+        .empty-state {
+            text-align: center;
+            color: #666;
+            padding: 3rem;
+        }
+
+        .empty-state h2 {
+            margin-bottom: 1rem;
+            color: #888;
+        }
+
+        .message-card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1rem;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        .message-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .message-id {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 16px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .message-date {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .message-content {
+            color: #333;
+            line-height: 1.6;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .message-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📋 All Messages</h1>
+            <a href="/" class="nav-link">✏️ Create New Message</a>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            Loading messages...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="messagesContainer" class="messages-container">
+            <div id="emptyState" class="empty-state" style="display: none;">
+                <h2>📝 No messages yet</h2>
+                <p>Start by creating your first message!</p>
+            </div>
+            <div id="messagesList"></div>
+        </div>
+    </div>
+
+    <script>
+        async function loadMessages() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const messagesContainer = document.getElementById('messagesContainer');
+            const emptyState = document.getElementById('emptyState');
+            const messagesList = document.getElementById('messagesList');
+
+            try {
+                const response = await fetch('/api/messages');
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load messages: ${response.status}`);
+                }
+
+                const messages = await response.json();
+                
+                loading.style.display = 'none';
+                messagesContainer.style.display = 'block';
+
+                if (messages.length === 0) {
+                    emptyState.style.display = 'block';
+                } else {
+                    renderMessages(messages);
+                }
+
+            } catch (err) {
+                loading.style.display = 'none';
+                error.style.display = 'block';
+                error.textContent = `❌ Error loading messages: ${err.message}`;
+                console.error('Error loading messages:', err);
+            }
+        }
+
+        function renderMessages(messages) {
+            const messagesList = document.getElementById('messagesList');
+            messagesList.innerHTML = '';
+
+            messages.forEach(message => {
+                const messageCard = document.createElement('div');
+                messageCard.className = 'message-card';
+
+                const date = new Date(message.created_at);
+                const formattedDate = date.toLocaleString();
+
+                messageCard.innerHTML = `
+                    <div class="message-header">
+                        <span class="message-id">ID: ${message.id}</span>
+                        <span class="message-date">${formattedDate}</span>
+                    </div>
+                    <div class="message-content">${escapeHtml(message.message)}</div>
+                `;
+
+                messagesList.appendChild(messageCard);
+            });
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Load messages when the page loads
+        window.addEventListener('DOMContentLoaded', loadMessages);
+    </script>
+</body>
+</html>
