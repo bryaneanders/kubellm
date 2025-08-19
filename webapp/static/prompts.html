@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>All Messages - Message Saver</title>
+    <title>All Prompts - Prompt Saver</title>
     <style>
         * {
             margin: 0;
@@ -83,7 +83,7 @@
             text-align: center;
         }
 
-        .messages-container {
+        .prompts-container {
             display: none;
         }
 
@@ -98,7 +98,7 @@
             color: #888;
         }
 
-        .message-card {
+        .prompt-card {
             background: #f8f9fa;
             border: 1px solid #e9ecef;
             border-radius: 12px;
@@ -107,12 +107,12 @@
             transition: transform 0.2s ease, box-shadow 0.2s ease;
         }
 
-        .message-card:hover {
+        .prompt-card:hover {
             transform: translateY(-2px);
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
 
-        .message-header {
+        .prompt-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
@@ -121,7 +121,7 @@
             gap: 0.5rem;
         }
 
-        .message-id {
+        .prompt-id {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             color: white;
             padding: 4px 12px;
@@ -130,12 +130,12 @@
             font-weight: 500;
         }
 
-        .message-date {
+        .prompt-date {
             color: #666;
             font-size: 0.9rem;
         }
 
-        .message-content {
+        .prompt-content {
             color: #333;
             line-height: 1.6;
             word-wrap: break-word;
@@ -157,7 +157,7 @@
                 padding: 1rem;
             }
 
-            .message-header {
+            .prompt-header {
                 flex-direction: column;
                 align-items: flex-start;
             }
@@ -167,80 +167,80 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📋 All Messages</h1>
-            <a href="/" class="nav-link">✏️ Create New Message</a>
+            <h1>📋 All Prompts</h1>
+            <a href="/" class="nav-link">✏️ Create New Prompt</a>
         </div>
         
         <div id="loading" class="loading">
             <div class="spinner"></div>
-            Loading messages...
+            Loading prompts...
         </div>
         
         <div id="error" class="error" style="display: none;"></div>
         
-        <div id="messagesContainer" class="messages-container">
+        <div id="promptsContainer" class="prompts-container">
             <div id="emptyState" class="empty-state" style="display: none;">
-                <h2>📝 No messages yet</h2>
-                <p>Start by creating your first message!</p>
+                <h2>📝 No prompts yet</h2>
+                <p>Start by creating your first prompt!</p>
             </div>
-            <div id="messagesList"></div>
+            <div id="promptsList"></div>
         </div>
     </div>
 
     <script>
-        async function loadMessages() {
+        async function loadPrompts() {
             const loading = document.getElementById('loading');
             const error = document.getElementById('error');
-            const messagesContainer = document.getElementById('messagesContainer');
+            const promptsContainer = document.getElementById('promptsContainer');
             const emptyState = document.getElementById('emptyState');
-            const messagesList = document.getElementById('messagesList');
+            const promptsList = document.getElementById('promptsList');
 
             try {
-                const response = await fetch('http://localhost:3001/messages');
+                const response = await fetch('http://localhost:3001/prompts');
                 
                 if (!response.ok) {
-                    throw new Error(`Failed to load messages: ${response.status}`);
+                    throw new Error(`Failed to load prompts: ${response.status}`);
                 }
 
-                const messages = await response.json();
+                const prompts = await response.json();
                 
                 loading.style.display = 'none';
-                messagesContainer.style.display = 'block';
+                promptsContainer.style.display = 'block';
 
-                if (messages.length === 0) {
+                if (prompts.length === 0) {
                     emptyState.style.display = 'block';
                 } else {
-                    renderMessages(messages);
+                    renderPrompts(prompts);
                 }
 
             } catch (err) {
                 loading.style.display = 'none';
                 error.style.display = 'block';
-                error.textContent = `❌ Error loading messages: ${err.message}`;
-                console.error('Error loading messages:', err);
+                error.textContent = `❌ Error loading prompts: ${err.prompt}`;
+                console.error('Error loading prompts:', err);
             }
         }
 
-        function renderMessages(messages) {
-            const messagesList = document.getElementById('messagesList');
-            messagesList.innerHTML = '';
+        function renderPrompts(prompts) {
+            const promptsList = document.getElementById('promptsList');
+            promptsList.innerHTML = '';
 
-            messages.forEach(message => {
-                const messageCard = document.createElement('div');
-                messageCard.className = 'message-card';
+            prompts.forEach(prompt => {
+                const promptCard = document.createElement('div');
+                promptCard.className = 'prompt-card';
 
-                const date = new Date(message.created_at);
+                const date = new Date(prompt.created_at);
                 const formattedDate = date.toLocaleString();
 
-                messageCard.innerHTML = `
-                    <div class="message-header">
-                        <span class="message-id">ID: ${message.id}</span>
-                        <span class="message-date">${formattedDate}</span>
+                promptCard.innerHTML = `
+                    <div class="prompt-header">
+                        <span class="prompt-id">ID: ${prompt.id}</span>
+                        <span class="prompt-date">${formattedDate}</span>
                     </div>
-                    <div class="message-content">${escapeHtml(message.message)}</div>
+                    <div class="prompt-content">${escapeHtml(prompt.prompt)}</div>
                 `;
 
-                messagesList.appendChild(messageCard);
+                promptsList.appendChild(promptCard);
             });
         }
 
@@ -250,8 +250,8 @@
             return div.innerHTML;
         }
 
-        // Load messages when the page loads
-        window.addEventListener('DOMContentLoaded', loadMessages);
+        // Load prompts when the page loads
+        window.addEventListener('DOMContentLoaded', loadPrompts);
     </script>
 </body>
 </html>

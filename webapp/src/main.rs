@@ -19,8 +19,8 @@ async fn serve_index() -> Html<&'static str> {
     Html(include_str!("../static/index.html"))
 }
 
-async fn serve_messages() -> Html<&'static str> {
-    Html(include_str!("../static/messages.html"))
+async fn serve_prompts() -> Html<&'static str> {
+    Html(include_str!("../static/prompts.html"))
 }
 
 async fn health_check() -> &'static str {
@@ -46,7 +46,7 @@ async fn main() -> Result<()> {
 
     let app = Router::new()
         .route("/", get(serve_index)) // serve html content
-        .route("/messages", get(serve_messages)) // serve html content
+        .route("/prompts", get(serve_prompts)) // serve html content
         .route("/health", get(health_check)) // rest endpoint
         .nest_service("/static", ServeDir::new("static"))
         .layer(CorsLayer::permissive()) // this is a bad idea for prod
@@ -59,7 +59,7 @@ async fn main() -> Result<()> {
 
     println!("🚀 Web app running on http://{}", bind_address);
     println!("🌐 Open your browser to view the interface");
-    println!("📂 View all messages at /messages");
+    println!("📂 View all prompts at /prompts");
     println!("❤️  GET /health for health check");
 
     axum::serve(listener, app)

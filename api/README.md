@@ -1,15 +1,15 @@
 # API Module
 
-A REST API server for managing messages, built with Rust and Axum.
+A REST API server for managing prompts, built with Rust and Axum.
 
 ## Overview
 
-This module provides a JSON API for creating and retrieving messages stored in a MySQL database. It uses the shared `core` library for database operations and configuration management.
+This module provides a JSON API for creating and retrieving prompts stored in a MySQL database. It uses the shared `core` library for database operations and configuration management.
 
 ## Features
 
-- **Create Messages**: POST endpoint to save new messages
-- **List Messages**: GET endpoint to retrieve all stored messages  
+- **Create Messages**: POST endpoint to save new prompts
+- **List Messages**: GET endpoint to retrieve all stored prompts  
 - **Health Check**: Simple endpoint to verify API status
 - **CORS Support**: Permissive CORS configuration for cross-origin requests
 - **Error Handling**: Proper HTTP status codes and error responses
@@ -19,8 +19,8 @@ This module provides a JSON API for creating and retrieving messages stored in a
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/health` | Health check endpoint |
-| `POST` | `/messages` | Create a new message |
-| `GET` | `/messages` | Retrieve all messages |
+| `POST` | `/prompts` | Create a new prompt |
+| `GET` | `/prompts` | Retrieve all prompts |
 
 ## Dependencies
 
@@ -40,7 +40,7 @@ Uses environment variables via the shared `core::Config`:
 ## Running
 
 ```bash
-./message-api
+./prompt-api
 ```
 
 The server will start and display:

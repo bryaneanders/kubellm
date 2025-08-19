@@ -66,8 +66,8 @@ impl Worker {
         time::sleep(Duration::from_secs(2)).await;
         
         match task.task_type.as_str() {
-            "message_analysis" => {
-                // Simulate message analysis
+            "prompt_analysis" => {
+                // Simulate prompt analysis
                 let result = serde_json::json!({
                     "analysis": "Task completed successfully",
                     "processed_at": chrono::Utc::now()

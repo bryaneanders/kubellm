@@ -2,25 +2,25 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
 
-// maps the json containing the message into this struct
+// maps the json containing the prompt into this struct
 #[derive(Deserialize)]
-pub struct CreateMessageRequest {
-    pub message: String,
+pub struct CreatePromptRequest {
+    pub prompt: String,
 }
 
 // Serialize: used to convert this struct into JSON for responses
 // FromRow: maps the database row into this struct
 #[derive(Serialize, FromRow)]
-pub struct Message {
+pub struct Prompt {
     pub id: i64,
-    pub message: String,
+    pub prompt: String,
     pub created_at: DateTime<Utc>,
 }
 
 #[derive(Serialize)]
-pub struct CreateMessageResponse {
+pub struct CreatePromptResponse {
     pub id: i64,
-    pub message: String,
+    pub prompt: String,
     pub created_at: DateTime<Utc>,
 }
 

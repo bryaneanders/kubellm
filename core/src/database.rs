@@ -1,7 +1,7 @@
 // load the config struct the config module
 use crate::config::Config;
 // load these struts from the models module
-use crate::models::{CreateMessageResponse, Message};
+use crate::models::{CreatePromptResponse, Prompt};
 // load error handling and result types
 use anyhow::{Context, Result};
 // date and time handling
@@ -28,9 +28,9 @@ pub async fn create_database_pool(config: &Config) -> Result<MySqlPool> {
 pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     sqlx::query(
         r#"
-        CREATE TABLE IF NOT EXISTS messages (
+        CREATE TABLE IF NOT EXISTS prompts (
             id INTEGER PRIMARY KEY AUTO_INCREMENT,
-            message TEXT NOT NULL,
+            prompt TEXT NOT NULL,
             created_at DATETIME NOT NULL
         )
         "#,
@@ -41,14 +41,14 @@ pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-pub async fn create_message(
+pub async fn create_prompt(
     pool: &MySqlPool,
-    message: String,
-) -> Result<CreateMessageResponse, sqlx::Error> {
+    prompt: String,
+) -> Result<CreatePromptResponse, sqlx::Error> {
     let insert_result = sqlx::query(
-        "INSERT INTO messages (message, created_at) VALUES (?, ?)"
+        "INSERT INTO prompts (prompt, created_at) VALUES (?, ?)"
     )
-        .bind(&message)
+        .bind(&prompt)
         .bind(Utc::now().naive_utc())
         .execute(pool)
         .await?;
@@ -56,7 +56,7 @@ pub async fn create_message(
     let id = insert_result.last_insert_id() as i64;
 
     let row = sqlx::query(
-        "SELECT id, message, created_at FROM messages WHERE id = ?"
+        "SELECT id, prompt, created_at FROM prompts WHERE id = ?"
     )
         .bind(id)
         .fetch_one(pool)
@@ -64,28 +64,28 @@ pub async fn create_message(
 
     let naive_datetime: NaiveDateTime = row.get(2);
 
-    Ok(CreateMessageResponse {
+    Ok(CreatePromptResponse {
         id: row.get("id"),
-        message: row.get("message"),
+        prompt: row.get("prompt"),
         created_at: naive_datetime.and_utc(),
     })
 }
 
-pub async fn get_all_messages(pool: &MySqlPool) -> Result<Vec<Message>, sqlx::Error> {
+pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Error> {
     let rows = sqlx::query(
-        "SELECT id, message, created_at FROM messages ORDER BY created_at DESC"
+        "SELECT id, prompt, created_at FROM prompts ORDER BY created_at DESC"
     )
         .fetch_all(pool)
         .await?;
 
-    let messages = rows.into_iter().map(|row| {
+    let prompts = rows.into_iter().map(|row| {
         let naive_datetime: NaiveDateTime = row.get("created_at");
-        Message {
+        Prompt {
             id: row.get("id"),
-            message: row.get("message"),
+            prompt: row.get("prompt"),
             created_at: naive_datetime.and_utc(),
         }
     }).collect();
 
-    Ok(messages)
+    Ok(prompts)
 }

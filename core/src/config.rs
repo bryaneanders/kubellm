@@ -20,7 +20,7 @@ impl Config {
         // Load environment variables from a .env file if it exists
         dotenvy::dotenv().ok();
 
-        // .context is use provide an error message if the environment variable is not set
+        // .context is use provide an error prompt if the environment variable is not set
         let database_url = env::var("DATABASE_URL")
             .context("DATABASE_URL environment variable is required")?;
 

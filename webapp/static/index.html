@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Message Saver</title>
+    <title>Prompt Saver</title>
     <style>
         * {
             margin: 0;
@@ -112,7 +112,7 @@
             cursor: not-allowed;
         }
 
-        .message {
+        .prompt {
             padding: 12px;
             border-radius: 8px;
             margin-top: 1rem;
@@ -160,14 +160,14 @@
     <div class="container">
         <div class="header">
             <h1>💬 Prompt Saver</h1>
-            <a href="/messages" class="nav-link">📋 View All Prompts</a>
+            <a href="/prompts" class="nav-link">📋 View All Prompts</a>
         </div>
-        <form id="messageForm">
+        <form id="promptForm">
             <div class="form-group">
-                <label for="message">Enter your message:</label>
-                <textarea id="message" name="message" placeholder="Type your prompt here..." required></textarea>
+                <label for="prompt">Enter your prompt:</label>
+                <textarea id="prompt" name="prompt" placeholder="Type your prompt here..." required></textarea>
             </div>
-            <button type="submit" id="submitBtn">Save Message</button>
+            <button type="submit" id="submitBtn">Save Prompt</button>
         </form>
         
         <div class="loading" id="loading">
@@ -179,8 +179,8 @@
     </div>
 
     <script>
-        const form = document.getElementById('messageForm');
-        const messageInput = document.getElementById('message');
+        const form = document.getElementById('promptForm');
+        const promptInput = document.getElementById('prompt');
         const submitBtn = document.getElementById('submitBtn');
         const loading = document.getElementById('loading');
         const result = document.getElementById('result');
@@ -188,34 +188,34 @@
         form.addEventListener('submit', async (e) => {
             e.preventDefault();
             
-            const message = messageInput.value.trim();
-            if (!message) {
-                showMessage('Please enter a prompt', 'error');
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                showPrompt('Please enter a prompt', 'error');
                 return;
             }
 
             setLoading(true);
-            clearMessage();
+            clearPrompt();
 
             try {
-                const response = await fetch('http://localhost:3001/messages', {
+                const response = await fetch('http://localhost:3001/prompts', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ message }),
+                    body: JSON.stringify({ prompt }),
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    showMessage(`✅ Prompt saved successfully! ID: ${data.id}`, 'success');
-                    messageInput.value = '';
+                    showPrompt(`✅ Prompt saved successfully! ID: ${data.id}`, 'success');
+                    promptInput.value = '';
                 } else {
-                    showMessage(`❌ Error: ${data.error}`, 'error');
+                    showPrompt(`❌ Error: ${data.error}`, 'error');
                 }
             } catch (error) {
-                showMessage('❌ Failed to save message. Please try again.', 'error');
+                showPrompt('❌ Failed to save prompt. Please try again.', 'error');
                 console.error('Error:', error);
             } finally {
                 setLoading(false);
@@ -225,16 +225,16 @@
         function setLoading(isLoading) {
             loading.style.display = isLoading ? 'block' : 'none';
             submitBtn.disabled = isLoading;
-            submitBtn.textContent = isLoading ? 'Saving...' : 'Save Message';
+            submitBtn.textContent = isLoading ? 'Saving...' : 'Save Prompt';
         }
 
-        function showMessage(text, type) {
+        function showPrompt(text, type) {
             result.textContent = text;
-            result.className = `message ${type}`;
+            result.className = `prompt ${type}`;
             result.style.display = 'block';
         }
 
-        function clearMessage() {
+        function clearPrompt() {
             result.style.display = 'none';
         }
     </script>

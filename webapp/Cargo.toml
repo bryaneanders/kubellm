@@ -1,5 +1,5 @@
 [package]
-name = "message-webapp"
+name = "prompts-webapp"
 version = "0.1.0"
 edition = "2021"
 

@@ -3,14 +3,14 @@ use anyhow::Result;
 // import modules to parse cli arguments and subcommands
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
-use core::{Config, create_database_pool, init_database, get_all_messages, create_message};
+use core::{Config, create_database_pool, init_database, get_all_prompts, create_prompt};
 
 // generates code to parse command line arguments
 #[derive(Parser)]
 // name of the program
-#[command(name = "message-cli")]
+#[command(name = "prompt-cli")]
 // description of the program
-#[command(about = "A CLI for managing messages")]
+#[command(about = "A CLI for managing prompts")]
 struct Cli {
     // this field will hold the subcommands
     #[command(subcommand)]
@@ -21,13 +21,13 @@ struct Cli {
 enum Commands {
     /// Initialize the database
     InitDb,
-    /// List all messages
+    /// List all prompts
     List,
-    /// Create a new message
+    /// Create a new prompt
     Create {
-        /// The message content
+        /// The prompt content
         #[arg(short, long)]
-        message: String,
+        prompt: String,
     },
     /// Show database connection status
     Status,
@@ -47,29 +47,29 @@ async fn main() -> Result<()> {
         }
         Commands::List => {
             let pool = create_database_pool(&config).await?;
-            let messages = get_all_messages(&pool).await?;
+            let prompts = get_all_prompts(&pool).await?;
             
-            if messages.is_empty() {
-                println!("No messages found");
+            if prompts.is_empty() {
+                println!("No prompts found");
             } else {
-                println!("Found {} messages:", messages.len());
-                for message in messages {
+                println!("Found {} prompts:", prompts.len());
+                for prompt in prompts {
                     println!("  [{}] {}: {}", 
-                        message.id, 
-                        message.created_at.format("%Y-%m-%d %H:%M:%S"), 
-                        message.message
+                        prompt.id, 
+                        prompt.created_at.format("%Y-%m-%d %H:%M:%S"), 
+                        prompt.prompt
                     );
                 }
             }
         }
-        Commands::Create { message } => {
+        Commands::Create { prompt } => {
             let pool = create_database_pool(&config).await?;
-            let result = create_message(&pool, message).await?;
-            println!("✅ Created message with ID: {}", result.id);
+            let result = create_prompt(&pool, prompt).await?;
+            println!("✅ Created prompt with ID: {}", result.id);
         }
         Commands::Status => {
             println!("Checking database connection...");
-            let pool = create_database_pool(&config).await?;
+            let _pool = create_database_pool(&config).await?;
             println!("✅ Database connection successful");
             println!("Database URL: {}", config.database_url);
         }
