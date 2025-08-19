@@ -12,9 +12,6 @@ axum = "0.7"
 tokio = { version = "1.0", features = ["full"] }
 # async sql toolkit which can leverage tokio and supports multiple databases
 sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "mysql"] }
-# components for network clients and servers
-# uses Service trait to create async functions that take requests and return responses
-tower = "0.4"
 # http middleware for tower
 tower-http = { version = "0.5", features = ["cors"] }
 # provides robust error handling
