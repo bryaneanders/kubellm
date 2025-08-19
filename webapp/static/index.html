@@ -159,20 +159,20 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>💬 Message Saver</h1>
-            <a href="/messages" class="nav-link">📋 View All Messages</a>
+            <h1>💬 Prompt Saver</h1>
+            <a href="/messages" class="nav-link">📋 View All Prompts</a>
         </div>
         <form id="messageForm">
             <div class="form-group">
                 <label for="message">Enter your message:</label>
-                <textarea id="message" name="message" placeholder="Type your message here..." required></textarea>
+                <textarea id="message" name="message" placeholder="Type your prompt here..." required></textarea>
             </div>
             <button type="submit" id="submitBtn">Save Message</button>
         </form>
         
         <div class="loading" id="loading">
             <div class="spinner"></div>
-            Saving message...
+            Saving prompt...
         </div>
         
         <div id="result"></div>
@@ -190,7 +190,7 @@
             
             const message = messageInput.value.trim();
             if (!message) {
-                showMessage('Please enter a message', 'error');
+                showMessage('Please enter a prompt', 'error');
                 return;
             }
 
@@ -198,7 +198,7 @@
             clearMessage();
 
             try {
-                const response = await fetch('/api/messages', {
+                const response = await fetch('http://localhost:3001/messages', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -209,7 +209,7 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    showMessage(`✅ Message saved successfully! ID: ${data.id}`, 'success');
+                    showMessage(`✅ Prompt saved successfully! ID: ${data.id}`, 'success');
                     messageInput.value = '';
                 } else {
                     showMessage(`❌ Error: ${data.error}`, 'error');

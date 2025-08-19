@@ -78,7 +78,7 @@ async fn main() -> Result<()> {
         .context("Failed to load configuration")?;
 
     println!("🔧 Configuration loaded");
-    println!("   Server: {}:{}", config.server_host, config.server_port);
+    println!("   Server: {}:{}", config.api_server_host, config.api_server_port);
     println!("   Max DB connections: {}", config.max_connections);
 
     // create mysql pool using properties in config
@@ -100,7 +100,7 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 
-    let bind_address = format!("{}:{}", config.server_host, config.server_port);
+    let bind_address = format!("{}:{}", config.api_server_host, config.api_server_port);
     let listener = tokio::net::TcpListener::bind(&bind_address)
         .await
         .context(format!("Failed to bind to {}", bind_address))?;

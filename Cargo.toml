@@ -2,8 +2,8 @@
 members = [
     "api",
     "core",
-    "cli"#,
+    "cli",
     #"worker",
-    #"webapp"
+    "webapp"
 ]
 resolver = "2"

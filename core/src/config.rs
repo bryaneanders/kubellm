@@ -7,8 +7,10 @@ use std::env;
 #[derive(Debug)]
 pub struct Config { // defines the config struct
     pub database_url: String,
-    pub server_host: String,
-    pub server_port: u16,
+    pub app_server_host: String,
+    pub app_server_port: u16,
+    pub api_server_host: String,
+    pub api_server_port: u16,
     pub max_connections: u32,
 }
 
@@ -22,11 +24,19 @@ impl Config {
         let database_url = env::var("DATABASE_URL")
             .context("DATABASE_URL environment variable is required")?;
 
-        let server_host = env::var("SERVER_HOST")
+        let app_server_host = env::var("APP_SERVER_HOST")
             .unwrap_or_else(|_| "127.0.0.1".to_string());
 
-        let server_port = env::var("SERVER_PORT")
+        let app_server_port = env::var("SERVER_PORT")
             .unwrap_or_else(|_| "3000".to_string())
+            .parse::<u16>()
+            .context("SERVER_PORT must be a valid port number")?;
+
+        let api_server_host = env::var("APP_SERVER_HOST")
+            .unwrap_or_else(|_| "127.0.0.1".to_string());
+
+        let api_server_port = env::var("SERVER_PORT")
+            .unwrap_or_else(|_| "3001".to_string())
             .parse::<u16>()
             .context("SERVER_PORT must be a valid port number")?;
 
@@ -37,8 +47,10 @@ impl Config {
 
         Ok(Config {
             database_url,
-            server_host,
-            server_port,
+            app_server_host,
+            app_server_port,
+            api_server_host,
+            api_server_port,
             max_connections,
         }) // return last statement with no semicolon, in this case
         // returns an instance of Config wrapped in an Ok response
