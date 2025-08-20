@@ -1,98 +1,18 @@
+mod claude;
+mod prompt;
+
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::Json,
     routing::{get, post},
     Router,
 };
 use core::{
-    Config, CreatePromptRequest, CreatePromptResponse, ErrorResponse, Prompt,
-    create_database_pool, init_database, create_prompt_record, get_all_prompts, call_claude
+    Config, create_database_pool, init_database,
 };
-// pool of mysql connections
-use sqlx::mysql::MySqlPool;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use anyhow::{Context, Result};
-
-// Map Arc<MySqlPool> as the type DatabaseConnection
-// This allows the pool state to be extracted based on the state
-// passed in when the router is initialized
-// separates the db implementation from DatabaseConnection type in handlers
-type DatabaseConnection = Arc<MySqlPool>;
-
-async fn create_prompt_handler(
-    State(pool): State<DatabaseConnection>, // extract db pool from api state (set in router declaration)
-    Json(payload): Json<CreatePromptRequest>, // extract prompt json from request
-) -> Result<Json<CreatePromptResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if payload.prompt.trim().is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Prompt cannot be empty".to_string(),
-            }),
-        ));
-    }
-
-    match create_prompt_record(&pool, payload.prompt, None).await {
-        Ok(prompt) => Ok(Json(prompt)), // return prompt as json on success
-        Err(e) => {
-            eprintln!("Database error: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Failed to create prompt".to_string(),
-                }),
-            )) // return error json on failure
-        }
-    }
-}
-
-async fn get_prompts_handler(
-    State(pool): State<DatabaseConnection>, // extract db pool from api state (router declaration)
-) -> Result<Json<Vec<Prompt>>, (StatusCode, Json<ErrorResponse>)> {
-    match get_all_prompts(&pool).await {
-        Ok(prompts) => Ok(Json(prompts)), // return all prompts as json on success
-        Err(e) => {
-            eprintln!("Database error: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Failed to fetch prompts".to_string(),
-                }),
-            )) // return error json on failure
-        }
-    }
-}
-
-async fn prompt_claude_handler(
-    State(pool): State<DatabaseConnection>,
-    Json(payload): Json<CreatePromptRequest>
-)-> Result<Json<CreatePromptResponse>, (StatusCode, Json<ErrorResponse>)> {
-    if payload.prompt.trim().is_empty() {
-        return Err((
-            StatusCode::BAD_REQUEST,
-            Json(ErrorResponse {
-                error: "Prompt cannot be empty".to_string(),
-            }),
-        ));
-    }
-
-    match call_claude(payload.prompt.trim(), &pool).await {
-        Ok(prompt_response) => {
-            Ok(Json(prompt_response)) // Return the response as JSON
-        }
-        Err(e) => {
-            eprintln!("Error running prompt: {}", e);
-            Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                Json(ErrorResponse {
-                    error: "Failed to run prompt".to_string(),
-                }),
-            ))
-        }
-    }
-}
+use crate::claude::prompt_claude_handler;
+use crate::prompt::{create_prompt_handler, get_prompts_handler,};
 
 async fn health_check() -> &'static str {
     "API is running!"
