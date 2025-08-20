@@ -94,7 +94,7 @@ impl Worker {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Config::from_env()?;
+    let config = Config::get();
     
     // Verify database connection
     let _pool = create_database_pool(&config).await?;

@@ -2,6 +2,7 @@
 use anyhow::{Context, Result};
 // use dotenvy to load environment variables from a .env file
 use std::env;
+use std::sync::OnceLock;
 
 // provides debug logging for configuration
 #[derive(Debug)]
@@ -13,6 +14,8 @@ pub struct Config { // defines the config struct
     pub api_server_port: u16,
     pub max_connections: u32,
 }
+
+static CONFIG: OnceLock<Config> = OnceLock::new();
 
 // implements functions for the config struct
 impl Config {
@@ -54,6 +57,10 @@ impl Config {
             max_connections,
         }) // return last statement with no semicolon, in this case
         // returns an instance of Config wrapped in an Ok response
+    }
+
+    pub fn get() -> &'static Config {
+        CONFIG.get_or_init(|| Self::from_env().expect("Failed to load configuration"))
     }
 
     pub fn _from_components() -> Result<String> {

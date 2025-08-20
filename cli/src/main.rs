@@ -36,7 +36,7 @@ enum Commands {
 #[tokio::main]
 async fn main() -> Result<()> {
     let cli = Cli::parse();
-    let config = Config::from_env()?;
+    let config = Config::get();
 
     match cli.command {
         Commands::InitDb => {
@@ -71,7 +71,7 @@ async fn main() -> Result<()> {
             println!("Checking database connection...");
             let _pool = create_database_pool(&config).await?;
             println!("✅ Database connection successful");
-            println!("Database URL: {}", config.database_url);
+            println!("Database URL: {}", &config.database_url);
         }
     }
 

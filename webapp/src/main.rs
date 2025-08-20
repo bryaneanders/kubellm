@@ -29,12 +29,11 @@ async fn health_check() -> &'static str {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Config::from_env()
-        .context("Failed to load configuration")?;
+    let config = Config::get();
 
     println!("🔧 Configuration loaded");
-    println!("   Server: {}:{}", config.app_server_host, config.app_server_port);
-    println!("   Max DB connections: {}", config.max_connections);
+    println!("   Server: {}:{}", &config.app_server_host, &config.app_server_port);
+    println!("   Max DB connections: {}", &config.max_connections);
 
     let pool = create_database_pool(&config).await?;
 
@@ -52,7 +51,7 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive()) // this is a bad idea for prod
         .with_state(db_connection); // store the Arc<MySqlPool> in the state (DatabaseConnection)
 
-    let bind_address = format!("{}:{}", config.app_server_host, config.app_server_port);
+    let bind_address = format!("{}:{}", &config.app_server_host, &config.app_server_port);
     let listener = tokio::net::TcpListener::bind(&bind_address)
         .await
         .context(format!("Failed to bind to {}", bind_address))?;
