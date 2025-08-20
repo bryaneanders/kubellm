@@ -7,11 +7,10 @@ use axum::{
 };
 use core::{
     Config, CreatePromptRequest, CreatePromptResponse, ErrorResponse, Prompt,
-    create_database_pool, init_database, create_prompt, get_all_prompts,
+    create_database_pool, init_database, create_prompt_record, get_all_prompts, call_claude
 };
 // pool of mysql connections
 use sqlx::mysql::MySqlPool;
-
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use anyhow::{Context, Result};
@@ -35,7 +34,7 @@ async fn create_prompt_handler(
         ));
     }
 
-    match create_prompt(&pool, payload.prompt).await {
+    match create_prompt_record(&pool, payload.prompt, None).await {
         Ok(prompt) => Ok(Json(prompt)), // return prompt as json on success
         Err(e) => {
             eprintln!("Database error: {}", e);
@@ -62,6 +61,35 @@ async fn get_prompts_handler(
                     error: "Failed to fetch prompts".to_string(),
                 }),
             )) // return error json on failure
+        }
+    }
+}
+
+async fn prompt_claude_handler(
+    State(pool): State<DatabaseConnection>,
+    Json(payload): Json<CreatePromptRequest>
+)-> Result<Json<CreatePromptResponse>, (StatusCode, Json<ErrorResponse>)> {
+    if payload.prompt.trim().is_empty() {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            Json(ErrorResponse {
+                error: "Prompt cannot be empty".to_string(),
+            }),
+        ));
+    }
+
+    match call_claude(payload.prompt.trim(), &pool).await {
+        Ok(prompt_response) => {
+            Ok(Json(prompt_response)) // Return the response as JSON
+        }
+        Err(e) => {
+            eprintln!("Error running prompt: {}", e);
+            Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    error: "Failed to run prompt".to_string(),
+                }),
+            ))
         }
     }
 }
@@ -96,6 +124,7 @@ async fn main() -> Result<()> {
         .route("/health", get(health_check))
         .route("/prompts", post(create_prompt_handler))
         .route("/prompts", get(get_prompts_handler))
+        .route("/prompt_claude", post(prompt_claude_handler))
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 
@@ -107,6 +136,7 @@ async fn main() -> Result<()> {
     println!("🚀 Server running on http://{}", bind_address);
     println!("📝 POST to /prompts to create a prompt");
     println!("📋 GET /prompts to view all prompts");
+    println!("📋 GET /prompt_claude to prompt Anthropic's Claude");
     println!("❤️ GET /health for health check");
 
     axum::serve(listener, app)

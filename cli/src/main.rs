@@ -3,7 +3,7 @@ use anyhow::Result;
 // import modules to parse cli arguments and subcommands
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
-use core::{Config, create_database_pool, init_database, get_all_prompts, create_prompt};
+use core::{Config, create_database_pool, init_database, get_all_prompts, create_prompt_record};
 
 // generates code to parse command line arguments
 #[derive(Parser)]
@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
         }
         Commands::Create { prompt } => {
             let pool = create_database_pool(&config).await?;
-            let result = create_prompt(&pool, prompt).await?;
+            let result = create_prompt_record(&pool, prompt, None).await?;
             println!("✅ Created prompt with ID: {}", result.id);
         }
         Commands::Status => {

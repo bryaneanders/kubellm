@@ -21,6 +21,7 @@ pub struct Prompt {
 pub struct CreatePromptResponse {
     pub id: i64,
     pub prompt: String,
+    pub response: Option<String>,
     pub created_at: DateTime<Utc>,
 }
 

@@ -13,6 +13,8 @@ pub struct Config { // defines the config struct
     pub api_server_host: String,
     pub api_server_port: u16,
     pub max_connections: u32,
+    pub anthropic_url: String,
+    pub anthropic_key: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -48,6 +50,11 @@ impl Config {
             .parse::<u32>()
             .context("DB_MAX_CONNECTIONS must be a valid number")?;
 
+        let anthropic_url = env::var("ANTHROPIC_BASE_URL")
+            .unwrap_or_else(|_| "https://api.anthropic.com/v1".to_string());
+
+        let anthropic_key = env::var("ANTHROPIC_KEY")?;
+
         Ok(Config {
             database_url,
             app_server_host,
@@ -55,6 +62,8 @@ impl Config {
             api_server_host,
             api_server_port,
             max_connections,
+            anthropic_url,
+            anthropic_key
         }) // return last statement with no semicolon, in this case
         // returns an instance of Config wrapped in an Ok response
     }

@@ -14,3 +14,5 @@ chrono = { version = "0.4", features = ["serde"] }
 dotenvy = "0.15"
 # provides robust error handling
 anyhow = "1.0"
+# web requests
+reqwest = { version = "0.11", features = ["json"] }

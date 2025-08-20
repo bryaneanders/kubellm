@@ -31,8 +31,9 @@ pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
         CREATE TABLE IF NOT EXISTS prompts (
             id INTEGER PRIMARY KEY AUTO_INCREMENT,
             prompt TEXT NOT NULL,
+            response MEDIUMTEXT,
             created_at DATETIME NOT NULL
-        )
+        );
         "#,
     )
     .execute(pool)
@@ -41,14 +42,16 @@ pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
     Ok(())
 }
 
-pub async fn create_prompt(
+pub async fn create_prompt_record(
     pool: &MySqlPool,
     prompt: String,
+    response: Option<&String>, // save the response or null if not provided
 ) -> Result<CreatePromptResponse, sqlx::Error> {
     let insert_result = sqlx::query(
-        "INSERT INTO prompts (prompt, created_at) VALUES (?, ?)"
+        "INSERT INTO prompts (prompt, response, created_at) VALUES (?, ?, ?)"
     )
         .bind(&prompt)
+        .bind(&response)
         .bind(Utc::now().naive_utc())
         .execute(pool)
         .await?;
@@ -56,20 +59,22 @@ pub async fn create_prompt(
     let id = insert_result.last_insert_id() as i64;
 
     let row = sqlx::query(
-        "SELECT id, prompt, created_at FROM prompts WHERE id = ?"
+        "SELECT id, prompt, response, created_at FROM prompts WHERE id = ?"
     )
         .bind(id)
         .fetch_one(pool)
         .await?;
 
-    let naive_datetime: NaiveDateTime = row.get(2);
+    let naive_datetime: NaiveDateTime = row.get(3);
 
     Ok(CreatePromptResponse {
         id: row.get("id"),
         prompt: row.get("prompt"),
+        response: row.get("response"),
         created_at: naive_datetime.and_utc(),
     })
 }
+
 
 pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Error> {
     let rows = sqlx::query(
