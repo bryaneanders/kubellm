@@ -56,12 +56,13 @@ struct AnthropicModelsResponse {
     last_id: Option<String>,
 }
 
-pub async fn call_claude(prompt: &str, pool: &MySqlPool,) -> Result<CreatePromptResponse, Box<dyn std::error::Error>> {
+pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,) -> Result<CreatePromptResponse, Box<dyn std::error::Error>> {
     let config = Config::get();
     let client = Client::new();
 
+    let model = model.unwrap_or(&config.default_claude_model);
     let request = ClaudeRequest {
-        model: "claude-sonnet-4-20250514".to_string(), // make this dynamic later
+        model: model.to_string(),
         max_tokens: 1024,
         messages: vec![Message {
             role: "user".to_string(),
@@ -90,7 +91,7 @@ pub async fn call_claude(prompt: &str, pool: &MySqlPool,) -> Result<CreatePrompt
             .map(|block| block.text.clone())
             .unwrap_or_else(|| "No response content".to_string());
 
-        Ok(create_prompt_record(pool, prompt.to_string(), Some(&response_text)).await?)
+        Ok(create_prompt_record(pool, prompt.to_string(), Some(&response_text), Some(model)).await?)
     } else {
         let error_text = response.text().await?;
         Err(format!("API request failed: {}", error_text).into())

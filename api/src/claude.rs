@@ -22,7 +22,12 @@ pub async fn claude_prompt_handler(
         ));
     }
 
-    match call_claude(payload.prompt.trim(), &pool).await {
+    let model = payload.model
+        .as_ref()
+        .map(|m| m.trim())
+        .filter(|m| !m.is_empty());
+    
+    match call_claude(payload.prompt.trim(), model,  &pool).await {
         Ok(prompt_response) => Ok(Json(prompt_response)),
         Err(e) => {
             eprintln!("Error running prompt: {}", e);

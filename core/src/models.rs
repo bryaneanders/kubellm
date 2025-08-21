@@ -6,6 +6,7 @@ use sqlx::FromRow;
 #[derive(Deserialize)]
 pub struct CreatePromptRequest {
     pub prompt: String,
+    pub model: Option<String>
 }
 
 // Serialize: used to convert this struct into JSON for responses
@@ -21,6 +22,7 @@ pub struct Prompt {
 pub struct CreatePromptResponse {
     pub id: i64,
     pub prompt: String,
+    pub model: String,
     pub response: Option<String>,
     pub created_at: DateTime<Utc>,
 }

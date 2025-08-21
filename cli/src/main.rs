@@ -64,7 +64,7 @@ async fn main() -> Result<()> {
         }
         Commands::Create { prompt } => {
             let pool = create_database_pool(&config).await?;
-            let result = create_prompt_record(&pool, prompt, None).await?;
+            let result = create_prompt_record(&pool, prompt, None, None).await?;
             println!("✅ Created prompt with ID: {}", result.id);
         }
         Commands::Status => {

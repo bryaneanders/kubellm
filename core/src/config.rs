@@ -15,6 +15,7 @@ pub struct Config { // defines the config struct
     pub max_connections: u32,
     pub anthropic_url: String,
     pub anthropic_key: String,
+    pub default_claude_model: String,
 }
 
 static CONFIG: OnceLock<Config> = OnceLock::new();
@@ -55,6 +56,9 @@ impl Config {
 
         let anthropic_key = env::var("ANTHROPIC_KEY")?;
 
+        let default_claude_model = env::var("DEFAULT_CLAUDE_MODEL")
+            .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
+
         Ok(Config {
             database_url,
             app_server_host,
@@ -63,7 +67,8 @@ impl Config {
             api_server_port,
             max_connections,
             anthropic_url,
-            anthropic_key
+            anthropic_key,
+            default_claude_model,
         }) // return last statement with no semicolon, in this case
         // returns an instance of Config wrapped in an Ok response
     }
