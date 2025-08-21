@@ -45,7 +45,7 @@ pub async fn create_prompt_handler(
 
 pub async fn get_prompts_handler(
     State(pool): State<DatabaseConnection>, // extract db pool from api state (router declaration)
-) -> anyhow::Result<Json<Vec<Prompt>>, (StatusCode, Json<ErrorResponse>)> {
+) -> Result<Json<Vec<Prompt>>, (StatusCode, Json<ErrorResponse>)> {
     match get_all_prompts(&pool).await {
         Ok(prompts) => Ok(Json(prompts)), // return all prompts as json on success
         Err(e) => {

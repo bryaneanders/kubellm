@@ -11,7 +11,7 @@ use core::{
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use anyhow::{Context, Result};
-use crate::claude::prompt_claude_handler;
+use crate::claude::{claude_prompt_handler, claude_models_handler};
 use crate::prompt::{create_prompt_handler, get_prompts_handler,};
 
 async fn health_check() -> &'static str {
@@ -44,7 +44,8 @@ async fn main() -> Result<()> {
         .route("/health", get(health_check))
         .route("/prompts", post(create_prompt_handler))
         .route("/prompts", get(get_prompts_handler))
-        .route("/prompt_claude", post(prompt_claude_handler))
+        .route("/claude/prompt", post(claude_prompt_handler))
+        .route("/claude/models", get(claude_models_handler))
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 

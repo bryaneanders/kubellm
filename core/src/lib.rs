@@ -9,4 +9,4 @@ pub mod claude;
 pub use config::Config;
 pub use database::{create_database_pool, init_database, create_prompt_record, get_all_prompts};
 pub use models::*;
-pub use claude::call_claude;
+pub use claude::{call_claude, get_claude_models, AnthropicModel};
