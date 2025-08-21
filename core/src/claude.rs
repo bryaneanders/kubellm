@@ -60,7 +60,13 @@ pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,) -
     let config = Config::get();
     let client = Client::new();
 
-    let model = model.unwrap_or(&config.default_claude_model);
+    let mut model = model.unwrap_or(&config.default_claude_model);
+    let models = get_claude_models().await?;
+    // loop over models and make sure the passed in models is valid
+    if !models.iter().any(|m| m.id == model) {
+        model = &config.default_claude_model;
+    }
+
     let request = ClaudeRequest {
         model: model.to_string(),
         max_tokens: 1024,
