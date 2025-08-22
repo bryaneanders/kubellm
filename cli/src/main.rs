@@ -29,8 +29,29 @@ enum Commands {
         #[arg(short, long)]
         prompt: String,
     },
+
+    /// Interact with Anthropic's Claude models
+    Claude {
+        #[command(subcommand)]
+        action: ClaudeCommands,
+    },
     /// Show database connection status
     Status,
+}
+
+#[derive(Subcommand)]
+enum ClaudeCommands {
+    /// Send a prompt to Claude
+    Prompt {
+        /// The prompt content
+        #[arg(short, long)]
+        prompt: String,
+        /// Model to use
+        #[arg(short, long)]
+        model: Option<String>,
+    },
+    /// Get available models
+    GetModels,
 }
 
 #[tokio::main]
@@ -66,6 +87,40 @@ async fn main() -> Result<()> {
             let pool = create_database_pool(&config).await?;
             let result = create_prompt_record(&pool, prompt, None, None).await?;
             println!("✅ Created prompt with ID: {}", result.id);
+        }
+        Commands::Claude { action } => {
+            match action {
+                ClaudeCommands::Prompt { prompt, model } => {
+                    let pool = create_database_pool(&config).await?;
+                    match core::call_claude(&prompt, model.as_deref(), &pool).await {
+                        Ok(response) => {
+                            println!("✅ Claude response:");
+                            if let Some(ref resp) = response.response {
+                                println!("{}", resp);
+                            } else {
+                                println!("(No response received)");
+                            }
+                            println!("Prompt ID: {}", response.id);
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Error calling Claude: {}", e);
+                        }
+                    }
+                }
+                ClaudeCommands::GetModels => {
+                    match core::get_claude_models().await {
+                        Ok(models) => {
+                            println!("Available Claude models:");
+                            for model in models {
+                                println!(" - {} ({})", model.display_name, model.id);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("❌ Error fetching models: {}", e);
+                        }
+                    }
+                }
+            }
         }
         Commands::Status => {
             println!("Checking database connection...");

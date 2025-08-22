@@ -41,11 +41,11 @@ pub struct Message {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct AnthropicModel {
-    id: String,
+    pub id: String,
     #[serde(rename = "type")]
-    model_type: String,
-    display_name: String,
-    created_at: String,
+    pub model_type: String,
+    pub display_name: String,
+    pub created_at: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -85,7 +85,6 @@ pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,) -
         .send()
         .await?;
 
-    // Check if request was successful
     if response.status().is_success() {
         // Parse the response
         let claude_response: ClaudeResponse = response.json().await?;
