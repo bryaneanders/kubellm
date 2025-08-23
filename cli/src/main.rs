@@ -7,6 +7,10 @@ use core::{Config, create_database_pool, init_database, get_all_prompts, create_
 use std::io::{self, Write};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::path::PathBuf;
+use std::time::{Duration, Instant};
+use rustyline::error::ReadlineError;
+use rustyline::{DefaultEditor}; //, Result as RustyResult};
 
 // generates code to parse command line arguments
 #[derive(Parser)]
@@ -63,6 +67,37 @@ enum ClaudeCommands {
     Usage
 }
 
+fn get_history_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
+    let home = dirs::home_dir()
+        .ok_or("Could not determine home directory")?;
+    Ok(home.join(".prompt-cli-history"))
+}
+
+fn load_history(rl: &mut DefaultEditor) {
+    match get_history_file_path() {
+        Ok(path) => {
+            if let Err(e) = rl.load_history(&path) {
+                // Only show error if it's not "file not found"
+                if path.exists() {
+                    eprintln!("Warning: Could not load history: {}", e);
+                }
+            }
+        }
+        Err(e) => eprintln!("Warning: {}", e),
+    }
+}
+
+fn save_history(rl: &mut DefaultEditor) {
+    match get_history_file_path() {
+        Ok(path) => {
+            if let Err(e) = rl.save_history(&path) {
+                eprintln!("Warning: Could not save history: {}", e);
+            }
+        }
+        Err(e) => eprintln!("Warning: {}", e),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     println!("Welcome to MyApp Interactive CLI!");
@@ -71,42 +106,35 @@ async fn main() {
 
     // Set up Ctrl+C handler
     let running = Arc::new(AtomicBool::new(true));
-    let ctrl_c_count = Arc::new(AtomicBool::new(false));
-    let ctrl_c_ref = ctrl_c_count.clone();
 
-    ctrlc::set_handler(move || {
-        if ctrl_c_ref.load(Ordering::SeqCst) {
-            println!("\nForce exiting...");
-            std::process::exit(0);
-        } else {
-            println!("\nPress Ctrl+C again within 2 seconds to force exit, or type 'exit' to quit gracefully.");
-            ctrl_c_ref.store(true, Ordering::SeqCst);
+    // Create rustyline editor
+    let mut rl = DefaultEditor::new().unwrap();
 
-            // Reset the flag after 2 seconds
-            let reset_flag = ctrl_c_ref.clone();
-            std::thread::spawn(move || {
-                std::thread::sleep(std::time::Duration::from_secs(2));
-                reset_flag.store(false, Ordering::SeqCst);
-            });
-        }
-    }).expect("Error setting Ctrl+C handler");
+    load_history(&mut rl);
+
+    // Track Ctrl+C presses
+    let mut ctrl_c_count = 0;
+    let mut last_ctrl_c: Option<Instant> = None;
+    let ctrl_c_timeout = Duration::from_secs(2);
 
     // Main interactive loop
     while running.load(Ordering::SeqCst) {
         print!("prompt-cli> ");
         io::stdout().flush().unwrap();
 
-        let mut input = String::new();
-        match io::stdin().read_line(&mut input) {
-            Ok(_) => {
-                let input = input.trim();
+        let readline =  rl.readline("prompt> ");
+        match readline {
+            Ok(line) => {
+                ctrl_c_count = 0; // reset on successful input
 
-                if input.is_empty() {
+                rl.add_history_entry(line.as_str()).unwrap();
+
+                if line.trim().is_empty() {
                     continue;
                 }
 
                 // Parse the command
-                let args = parse_quoted_args(input);
+                let args = parse_quoted_args(&line);
                 if args.is_empty() {
                     continue;
                 }
@@ -130,9 +158,9 @@ async fn main() {
                     }
                     Err(e) => {
                         // Handle parsing errors gracefully
-                        if input == "help" {
+                        if line == "help" {
                             show_help();
-                        } else if input == "exit" || input == "quit" {
+                        } else if line == "exit" || line == "quit" {
                             println!("Goodbye!");
                             break;
                         } else {
@@ -142,12 +170,40 @@ async fn main() {
                     }
                 }
             }
+            Err(ReadlineError::Interrupted) => {
+                let now = Instant::now();
+
+                // Check if this is within the timeout window of the last Ctrl+C
+                let within_timeout = last_ctrl_c
+                    .map(|last| now.duration_since(last) < ctrl_c_timeout)
+                    .unwrap_or(false);
+
+                if within_timeout {
+                    ctrl_c_count += 1;
+                    if ctrl_c_count >= 2 {
+                        println!("\nForce exiting...");
+                        break;
+                    }
+                } else {
+                    // Reset counter if too much time has passed or first press
+                    ctrl_c_count = 1;
+                }
+
+                println!("\nPress Ctrl+C again within 2 seconds to force exit, or type 'exit' to quit gracefully.");
+                last_ctrl_c = Some(now);
+            }
+            Err(ReadlineError::Eof) => {
+                println!("Goodbye!");
+                break;
+            }
             Err(error) => {
-                println!("Error reading input: {}", error);
+                println!("Error: {}", error);
                 break;
             }
         }
     }
+
+    save_history(&mut rl);
 }
 
 async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::Error>> {
