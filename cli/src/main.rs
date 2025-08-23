@@ -3,14 +3,14 @@ use anyhow::Result;
 // import modules to parse cli arguments and subcommands
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
-use core::{Config, create_database_pool, init_database, get_all_prompts, create_prompt_record};
+use core::{create_database_pool, create_prompt_record, get_all_prompts, init_database, Config};
 use std::io::{self, Write};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
 use rustyline::error::ReadlineError;
-use rustyline::{DefaultEditor}; //, Result as RustyResult};
+use rustyline::DefaultEditor;
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+use std::time::{Duration, Instant};
+
 
 // generates code to parse command line arguments
 #[derive(Parser)]
@@ -47,7 +47,7 @@ enum Commands {
     /// Show usage information
     Usage,
     /// Exit the application
-    Exit
+    Exit,
 }
 
 #[derive(Subcommand)]
@@ -64,12 +64,11 @@ enum ClaudeCommands {
     /// Get available models
     GetModels,
     /// Usage of Claude commands
-    Usage
+    Usage,
 }
 
 fn get_history_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let home = dirs::home_dir()
-        .ok_or("Could not determine home directory")?;
+    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
     Ok(home.join(".prompt-cli-history"))
 }
 
@@ -98,34 +97,112 @@ fn save_history(rl: &mut DefaultEditor) {
     }
 }
 
+#[derive(Debug, Clone)]
+struct CtrlCState {
+    count: u32,
+    last_time: Option<Instant>,
+    showing_message: bool,
+    force_exit: bool, // New field to signal force exit
+    ignore_next_input: bool,  // New field
+}
+
+impl CtrlCState {
+    fn new() -> Self {
+        Self {
+            count: 0,
+            last_time: None,
+            showing_message: false,
+            force_exit: false,
+            ignore_next_input:    false,
+        }
+    }
+
+    fn reset(&mut self) {
+        self.count = 0;
+        self.last_time = None;
+        self.showing_message = false;
+        self.force_exit = false;
+        self.ignore_next_input = false;
+    }
+}
+
+fn clear_message_if_showing(state: &Arc<Mutex<CtrlCState>>) {
+    let mut state_lock = state.lock().unwrap();
+    if state_lock.showing_message {
+        // Don't clear if the message was just shown (within last 200ms)
+        if let Some(last_time) = state_lock.last_time {
+            if Instant::now().duration_since(last_time) < Duration::from_millis(200) {
+                return; // Don't clear yet, message is still fresh
+            }
+        }
+
+        print!("\x1b[s\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[1A\r");
+        io::stdout().flush().unwrap();
+        state_lock.showing_message = false;
+        state_lock.ignore_next_input = true; // Set flag to ignore next input
+    }
+}
+
 #[tokio::main]
 async fn main() {
     println!("Welcome to MyApp Interactive CLI!");
     println!("Type 'help' for available commands or 'exit' to quit.");
     println!("Press Ctrl+C twice quickly to force exit.\n");
 
-    // Set up Ctrl+C handler
-    let running = Arc::new(AtomicBool::new(true));
-
     // Create rustyline editor
     let mut rl = DefaultEditor::new().unwrap();
 
     load_history(&mut rl);
 
-    // Track Ctrl+C presses
-    let mut ctrl_c_count = 0;
-    let mut last_ctrl_c: Option<Instant> = None;
+    let mut use_blank_prompt = false;
+
+    let ctrl_c_state = Arc::new(Mutex::new(CtrlCState::new()));
     let ctrl_c_timeout = Duration::from_secs(2);
 
-    // Main interactive loop
-    while running.load(Ordering::SeqCst) {
-        print!("prompt-cli> ");
-        io::stdout().flush().unwrap();
+    let state_clone = ctrl_c_state.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(Duration::from_millis(100));
+        let mut state = state_clone.lock().unwrap();
 
-        let readline =  rl.readline("prompt> ");
+        if state.showing_message {
+            if let Some(last_time) = state.last_time {
+                if Instant::now().duration_since(last_time) >= ctrl_c_timeout {
+                    print!("\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[2A\x1b[13G");
+                    io::stdout().flush().unwrap();
+                    state.reset();
+                    state.ignore_next_input = true; // Set flag to ignore next input
+                }
+            }
+        }
+    });
+
+    // Main interactive loop
+    loop {
+        clear_message_if_showing(&ctrl_c_state);
+
+        {
+            let state = ctrl_c_state.lock().unwrap();
+
+            if state.force_exit {
+                println!("Force exiting...");
+                break;
+            }
+        }
+
+        let readline: Result<String, ReadlineError>;
+        if use_blank_prompt {
+            readline = rl.readline("");
+            use_blank_prompt = false;
+        } else {
+            readline = rl.readline("prompt-cli> ");
+        }
+
         match readline {
             Ok(line) => {
-                ctrl_c_count = 0; // reset on successful input
+                {
+                    let mut state = ctrl_c_state.lock().unwrap();
+                    state.reset();
+                }
 
                 rl.add_history_entry(line.as_str()).unwrap();
 
@@ -144,18 +221,16 @@ async fn main() {
                 full_args.extend(args.iter().map(|s| s.as_str()));
 
                 match Cli::try_parse_from(full_args) {
-                    Ok(cli) => {
-                        match execute_command(cli.command).await {
-                            Ok(should_continue) => {
-                                if !should_continue {
-                                    break;
-                                }
-                            }
-                            Err(e) => {
-                                eprintln!("❌ Error executing command: {}", e);
+                    Ok(cli) => match execute_command(cli.command).await {
+                        Ok(should_continue) => {
+                            if !should_continue {
+                                break;
                             }
                         }
-                    }
+                        Err(e) => {
+                            eprintln!("❌ Error executing command: {}", e);
+                        }
+                    },
                     Err(e) => {
                         // Handle parsing errors gracefully
                         if line == "help" {
@@ -172,25 +247,47 @@ async fn main() {
             }
             Err(ReadlineError::Interrupted) => {
                 let now = Instant::now();
+                let mut state = ctrl_c_state.lock().unwrap();
 
                 // Check if this is within the timeout window of the last Ctrl+C
-                let within_timeout = last_ctrl_c
+                let within_timeout = state
+                    .last_time
                     .map(|last| now.duration_since(last) < ctrl_c_timeout)
                     .unwrap_or(false);
 
+                if within_timeout && state.showing_message {
+                    // This is the second Ctrl+C while message is showing
+                    state.force_exit = true;
+                    drop(state);
+                    continue; // Go back to main loop which will detect force_exit
+                }
+
                 if within_timeout {
-                    ctrl_c_count += 1;
-                    if ctrl_c_count >= 2 {
-                        println!("\nForce exiting...");
+                    state.count += 1;
+                    if state.count >= 2 {
+                        println!("Force exiting...");
                         break;
                     }
                 } else {
-                    // Reset counter if too much time has passed or first press
-                    ctrl_c_count = 1;
+                    // Reset counter if too much time has passed
+                    state.count = 1;
                 }
 
-                println!("\nPress Ctrl+C again within 2 seconds to force exit, or type 'exit' to quit gracefully.");
-                last_ctrl_c = Some(now);
+                // Show the warning message below the current prompt
+                println!("Press Ctrl+C again within 2 seconds to force exit...");
+                use_blank_prompt = true;
+                state.showing_message = true;
+                state.last_time = Some(now);
+                drop(state);
+
+                //tokio::time::sleep(Duration::from_millis(100)).await;
+
+                // Simple approach: just wait for the next readline call
+                // The background thread will clear the message after 2 seconds
+                // The next iteration will handle any input (including Ctrl+C)
+
+                // Continue to next iteration which will call readline normally
+                continue;
             }
             Err(ReadlineError::Eof) => {
                 println!("Goodbye!");
@@ -224,10 +321,11 @@ async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::
             } else {
                 println!("Found {} prompts:", prompts.len());
                 for prompt in prompts {
-                    println!("  [{}] {}: {}",
-                             prompt.id,
-                             prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
-                             prompt.prompt
+                    println!(
+                        "  [{}] {}: {}",
+                        prompt.id,
+                        prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
+                        prompt.prompt
                     );
                 }
             }
@@ -237,46 +335,42 @@ async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::
             let result = create_prompt_record(&pool, prompt, None, None).await?;
             println!("✅ Created prompt with ID: {}", result.id);
         }
-        Commands::Claude { action } => {
-            match action {
-                ClaudeCommands::Prompt { prompt, model } => {
-                    let pool = create_database_pool(&config).await?;
-                    match core::call_claude(&prompt, model.as_deref(), &pool).await {
-                        Ok(response) => {
-                            println!("✅ Claude response:");
-                            if let Some(ref resp) = response.response {
-                                println!("{}", resp);
-                            } else {
-                                println!("(No response received)");
-                            }
-                            println!("Prompt ID: {}", response.id);
+        Commands::Claude { action } => match action {
+            ClaudeCommands::Prompt { prompt, model } => {
+                let pool = create_database_pool(&config).await?;
+                match core::call_claude(&prompt, model.as_deref(), &pool).await {
+                    Ok(response) => {
+                        println!("✅ Claude response:");
+                        if let Some(ref resp) = response.response {
+                            println!("{}", resp);
+                        } else {
+                            println!("(No response received)");
                         }
-                        Err(e) => {
-                            eprintln!("❌ Error calling Claude: {}", e);
-                        }
+                        println!("Prompt ID: {}", response.id);
                     }
-                }
-                ClaudeCommands::GetModels => {
-                    match core::get_claude_models().await {
-                        Ok(models) => {
-                            println!("Available Claude models:");
-                            for model in models {
-                                println!(" - {} ({})", model.display_name, model.id);
-                            }
-                        }
-                        Err(e) => {
-                            eprintln!("❌ Error fetching models: {}", e);
-                        }
+                    Err(e) => {
+                        eprintln!("❌ Error calling Claude: {}", e);
                     }
-                }
-                ClaudeCommands::Usage => {
-                    println!("Claude command help:");
-                    println!("  prompt -p <prompt> [-m <model>]   Send a prompt to Claude");
-                    println!("  get-models                        Get available models");
-                    println!("  help                              Show this help message");
                 }
             }
-        }
+            ClaudeCommands::GetModels => match core::get_claude_models().await {
+                Ok(models) => {
+                    println!("Available Claude models:");
+                    for model in models {
+                        println!(" - {} ({})", model.display_name, model.id);
+                    }
+                }
+                Err(e) => {
+                    eprintln!("❌ Error fetching models: {}", e);
+                }
+            },
+            ClaudeCommands::Usage => {
+                println!("Claude command help:");
+                println!("  prompt -p <prompt> [-m <model>]   Send a prompt to Claude");
+                println!("  get-models                        Get available models");
+                println!("  help                              Show this help message");
+            }
+        },
         Commands::Status => {
             println!("Checking database connection...");
             let _pool = create_database_pool(&config).await?;
@@ -303,16 +397,19 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
 
     while let Some(ch) = chars.next() {
         match ch {
-            '"' => { // switch to turn on or off quotes mode
+            '"' => {
+                // switch to turn on or off quotes mode
                 in_quotes = !in_quotes;
             }
-            ' ' if !in_quotes => { // break into a new arg on space if not in quotes
+            ' ' if !in_quotes => {
+                // break into a new arg on space if not in quotes
                 if !current_arg.is_empty() {
                     args.push(current_arg.clone());
                     current_arg.clear();
                 }
             }
-            '\\' if in_quotes => { // Handle escaped characters in quotes
+            '\\' if in_quotes => {
+                // Handle escaped characters in quotes
                 if let Some(next_ch) = chars.next() {
                     match next_ch {
                         'n' => current_arg.push('\n'),
@@ -320,7 +417,8 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
                         'r' => current_arg.push('\r'),
                         '\\' => current_arg.push('\\'),
                         '"' => current_arg.push('"'),
-                        _ => { // default case, just add the \\
+                        _ => {
+                            // default case, just add the \\
                             current_arg.push('\\');
                             current_arg.push(next_ch);
                         }
@@ -339,7 +437,6 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
 
     args
 }
-
 
 fn show_help() {
     println!("Available commands:");
