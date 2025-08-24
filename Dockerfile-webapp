@@ -2,7 +2,7 @@
 FROM rust:1-slim-bookworm AS builder
 
 WORKDIR /app
-RUN mkdir core cli
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
@@ -17,19 +17,23 @@ ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
 ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
 ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
 
-# Copy workspace configuration
-COPY cli/Cargo.toml ./
+RUN mkdir webapp cli
+
+# Copy workspace configurations
 COPY core/Cargo.toml ./core/
-COPY cli/Cargo.toml ./cli/
+COPY webapp/Cargo.toml ./webapp/
 
 # Copy source code
 COPY core/src ./core/src
-COPY cli/src ./cli/src
+COPY webapp/src ./webapp/src
 
-WORKDIR /app/cli
+# Copy static assets
+COPY webapp/static ./webapp/static
 
-# Build the CLI binary
-RUN cargo build --release --bin prompts-cli
+WORKDIR /app/webapp
+
+# Build the APP binary
+RUN cargo build --release --bin prompts-webapp
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -44,11 +48,11 @@ RUN useradd -r -s /bin/false appuser
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/cli/target/release/prompts-cli /usr/local/bin/prompts-cli
+COPY --from=builder /app/webapp/target/release/prompts-webapp /usr/local/bin/prompts-webapp
 
-RUN chown root:root /usr/local/bin/prompts-cli && \
-    chmod 755 /usr/local/bin/prompts-cli
+RUN chown root:root /usr/local/bin/prompts-webapp && \
+    chmod 755 /usr/local/bin/prompts-webapp
 
 USER appuser
 
-ENTRYPOINT ["/usr/local/bin/prompts-cli"]
+ENTRYPOINT ["/usr/local/bin/prompts-webapp"]

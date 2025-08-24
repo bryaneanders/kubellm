@@ -2,7 +2,7 @@
 FROM rust:1-slim-bookworm AS builder
 
 WORKDIR /app
-RUN mkdir core cli
+
 RUN apt-get update && apt-get install -y \
     build-essential \
     pkg-config \
@@ -17,19 +17,20 @@ ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
 ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
 ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
 
-# Copy workspace configuration
-COPY cli/Cargo.toml ./
+RUN mkdir api cli
+
+# Copy workspace configurations
 COPY core/Cargo.toml ./core/
-COPY cli/Cargo.toml ./cli/
+COPY api/Cargo.toml ./api/
 
 # Copy source code
 COPY core/src ./core/src
-COPY cli/src ./cli/src
+COPY api/src ./api/src
 
-WORKDIR /app/cli
+WORKDIR /app/api
 
-# Build the CLI binary
-RUN cargo build --release --bin prompts-cli
+# Build the API binary
+RUN cargo build --release --bin prompts-api
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -44,11 +45,11 @@ RUN useradd -r -s /bin/false appuser
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/cli/target/release/prompts-cli /usr/local/bin/prompts-cli
+COPY --from=builder /app/api/target/release/prompts-api /usr/local/bin/prompts-api
 
-RUN chown root:root /usr/local/bin/prompts-cli && \
-    chmod 755 /usr/local/bin/prompts-cli
+RUN chown root:root /usr/local/bin/prompts-api && \
+    chmod 755 /usr/local/bin/prompts-api
 
 USER appuser
 
-ENTRYPOINT ["/usr/local/bin/prompts-cli"]
+ENTRYPOINT ["/usr/local/bin/prompts-api"]
