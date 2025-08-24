@@ -1,0 +1,57 @@
+# Build stage
+FROM rust:1-slim-bookworm as builder
+
+WORKDIR /app
+RUN mkdir core cli
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    pkg-config \
+    libssl-dev \
+    openssl \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Set environment variables
+ENV OPENSSL_DIR=/usr
+ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
+ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
+ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
+
+# Copy workspace configuration
+COPY cli/Cargo.toml ./
+COPY core/Cargo.toml ./core/
+COPY cli/Cargo.toml ./cli/
+
+# Copy source code
+COPY core/src ./core/src
+COPY cli/src ./cli/src
+
+# Build the CLI binary
+RUN cd cli && cargo build --release --bin prompts-cli
+
+# Runtime stage
+FROM debian:bookworm-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app user
+RUN useradd -r -s /bin/false appuser
+
+WORKDIR /app
+
+# Copy the binary from builder stage
+COPY --from=builder /app/cli/target/release/prompts-cli /usr/local/bin/prompts-cli
+
+# Set ownership and permissions
+RUN chown root:root /usr/local/bin/prompts-cli && \
+    chmod 755 /usr/local/bin/prompts-cli
+
+# Switch to non-root user
+USER appuser
+
+# Set the entrypoint
+ENTRYPOINT ["/usr/local/bin/prompts-cli"]
