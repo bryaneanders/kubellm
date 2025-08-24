@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use std::env;
-use std::path::PathBuf;
 use std::sync::OnceLock;
 
 #[derive(Debug)]
@@ -8,7 +7,7 @@ pub struct CoreConfig {
     pub database_url: String,
     pub max_connections: u32,
     pub anthropic_url: String,
-    pub anthropic_key: String,
+    pub anthropic_key: Option<String>,
     pub default_claude_model: String,
 }
 
@@ -19,8 +18,7 @@ impl CoreConfig {
     pub fn from_env() -> Result<Self> {
         dotenvy::dotenv().ok();
 
-        let database_url = Self::_build_db_url()
-            .expect("DATABASE_URL environment variable is required");
+        let database_url = Self::build_db_url()?;
 
         let max_connections = env::var("DB_MAX_CONNECTIONS")
             .unwrap_or_else(|_| "10".to_string())
@@ -30,7 +28,7 @@ impl CoreConfig {
         let anthropic_url = env::var("ANTHROPIC_BASE_URL")
             .unwrap_or_else(|_| "https://api.anthropic.com/v1".to_string());
 
-        let anthropic_key = env::var("ANTHROPIC_KEY")?;
+        let anthropic_key = env::var("ANTHROPIC_KEY").ok();
 
         let default_claude_model = env::var("DEFAULT_CLAUDE_MODEL")
             .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
@@ -48,7 +46,7 @@ impl CoreConfig {
         CONFIG.get_or_init(|| Self::from_env().expect("Failed to load configuration"))
     }
 
-    fn _build_db_url() -> Result<String> {
+    fn build_db_url() -> Result<String> {
         let host = env::var("DB_HOST").context("DB_HOST is required")?;
         let port = env::var("DB_PORT").unwrap_or_else(|_| "3306".to_string());
         let database = env::var("DB_NAME").context("DB_NAME is required")?;
@@ -60,10 +58,4 @@ impl CoreConfig {
             username, password, host, port, database
         ))
     }
-
-    pub fn get_history_file_path() -> PathBuf {
-        let history_path = dirs::home_dir()
-            .map(|home| home.join(".prompt-cli-history"))
-            .unwrap_or_else(|| PathBuf::from(".prompt-cli-history"));
-        history_path
-    }}
+}

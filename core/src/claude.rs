@@ -60,9 +60,13 @@ pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,) -
     let config = CoreConfig::get();
     let client = Client::new();
 
+    if config.anthropic_key.is_none() {
+        return Err("ANTHROPIC_KEY is not set".into());
+    }
+
     let mut model = model.unwrap_or(&config.default_claude_model);
     let models = get_claude_models().await?;
-    // loop over models and make sure the passed in models is valid
+    // loop over models and make sure the passed in models is valid otherwise use default
     if !models.iter().any(|m| m.id == model) {
         model = &config.default_claude_model;
     }
@@ -78,7 +82,7 @@ pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,) -
 
     let response = client
         .post(&format!("{}/messages", &config.anthropic_url))
-        .header("x-api-key", &config.anthropic_key)
+        .header("x-api-key", &config.anthropic_key.clone().unwrap())
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json")
         .json(&request)
@@ -107,9 +111,13 @@ pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::err
     let config = CoreConfig::get();
     let client = Client::new();
 
+    if config.anthropic_key.is_none() {
+        return Err("ANTHROPIC_KEY is not set".into());
+    }
+
     let response = client
         .get(&format!("{}/models", &config.anthropic_url))
-        .header("x-api-key", &config.anthropic_key)
+        .header("x-api-key", &config.anthropic_key.clone().unwrap())
         .header("anthropic-version", "2023-06-01")
         .send()
         .await?;
