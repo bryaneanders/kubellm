@@ -1,15 +1,17 @@
+mod config;
+
 // allow
 use anyhow::Result;
 // import modules to parse cli arguments and subcommands
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
-use core::{create_database_pool, create_prompt_record, get_all_prompts, init_database, Config};
+use core::{create_database_pool, create_prompt_record, get_all_prompts, init_database, CoreConfig};
 use std::io::{self, Write};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
-use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+use crate::config::CliConfig;
 
 
 // generates code to parse command line arguments
@@ -67,34 +69,22 @@ enum ClaudeCommands {
     Usage,
 }
 
-fn get_history_file_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    let home = dirs::home_dir().ok_or("Could not determine home directory")?;
-    Ok(home.join(".prompt-cli-history"))
-}
-
 fn load_history(rl: &mut DefaultEditor) {
-    match get_history_file_path() {
-        Ok(path) => {
-            if let Err(e) = rl.load_history(&path) {
-                // Only show error if it's not "file not found"
-                if path.exists() {
-                    eprintln!("Warning: Could not load history: {}", e);
-                }
-            }
+    let config = CliConfig::get();
+    if let Err(e) = rl.load_history(&config.history_file_path) {
+        // Only show error if it's not "file not found"
+        if config.history_file_path.exists() {
+            eprintln!("Warning: Could not load history: {}", e);
         }
-        Err(e) => eprintln!("Warning: {}", e),
     }
 }
 
 fn save_history(rl: &mut DefaultEditor) {
-    match get_history_file_path() {
-        Ok(path) => {
-            if let Err(e) = rl.save_history(&path) {
-                eprintln!("Warning: Could not save history: {}", e);
-            }
-        }
-        Err(e) => eprintln!("Warning: {}", e),
+    let config = CliConfig::get();
+    if let Err(e) = rl.save_history(&config.history_file_path) {
+        eprintln!("Warning: Could not save history: {}", e);
     }
+
 }
 
 #[derive(Debug, Clone)]
@@ -304,7 +294,7 @@ async fn main() {
 }
 
 async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::Error>> {
-    let config = Config::get();
+    let config = CoreConfig::get();
     match command {
         Commands::InitDb => {
             println!("Initializing database...");

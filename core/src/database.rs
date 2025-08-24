@@ -1,5 +1,5 @@
 // load the config struct the config module
-use crate::config::Config;
+use crate::config::CoreConfig;
 // load these struts from the models module
 use crate::models::{CreatePromptResponse, Prompt};
 // load error handling and result types
@@ -9,7 +9,7 @@ use chrono::{Utc, NaiveDateTime};
 // load mysql pools and database row modules
 use sqlx::{mysql::MySqlPool, Row};
 
-pub async fn create_database_pool(config: &Config) -> Result<MySqlPool> {
+pub async fn create_database_pool(config: &CoreConfig) -> Result<MySqlPool> {
     // create a connection pool to the MySQL database using the URL from the config
     let pool = MySqlPool::connect(&config.database_url)
         .await

@@ -6,11 +6,12 @@ use axum::{
     Router,
 };
 use core::{
-    Config, create_database_pool, init_database,
+    create_database_pool, init_database,
 };
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use anyhow::{Context, Result};
+use prompts_api::ApiConfig;
 use crate::claude::{claude_prompt_handler, claude_models_handler};
 use crate::prompt::{create_prompt_handler, get_prompts_handler,};
 
@@ -21,15 +22,15 @@ async fn health_check() -> &'static str {
 // Create a multi-threaded Tokio runtime for the api server
 #[tokio::main]
 async fn main() -> Result<()> {
-    // load config from .env file
-    let config = Config::get();
+    let core_config = core::CoreConfig::get();
+    let api_config = ApiConfig::get();
 
     println!("🔧 Configuration loaded");
-    println!("   Server: {}:{}", &config.api_server_host, &config.api_server_port);
-    println!("   Max DB connections: {}", &config.max_connections);
+    println!("   Server: {}:{}", &api_config.api_server_host, &api_config.api_server_port);
+    println!("   Max DB connections: {}", &core_config.max_connections);
 
     // create mysql pool using properties in config
-    let pool = create_database_pool(&config).await?;
+    let pool = create_database_pool(&core_config).await?;
 
     // wait for the pool to initialize
     init_database(&pool)
@@ -49,7 +50,7 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 
-    let bind_address = format!("{}:{}", &config.api_server_host, &config.api_server_port);
+    let bind_address = format!("{}:{}", &api_config.api_server_host, &api_config.api_server_port);
     let listener = tokio::net::TcpListener::bind(&bind_address)
         .await
         .context(format!("Failed to bind to {}", bind_address))?;
