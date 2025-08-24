@@ -418,6 +418,10 @@ async fn execute_command(
         Commands::Usage => {
             show_help();
         }
+        Commands::Exit => {
+            println!("Goodbye!");
+            return Ok(false); // Exit the loop
+        }
     }
     Ok(true) // Continue the loop
 }
