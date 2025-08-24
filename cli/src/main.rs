@@ -1,18 +1,18 @@
 mod config;
 
-// allow
 use anyhow::Result;
 // import modules to parse cli arguments and subcommands
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
-use core::{create_database_pool, create_prompt_record, get_all_prompts, init_database, CoreConfig};
-use std::io::{self, Write};
+use crate::config::CliConfig;
+use core::{
+    create_database_pool, create_prompt_record, get_all_prompts, init_database, CoreConfig,
+};
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use crate::config::CliConfig;
-
 
 // generates code to parse command line arguments
 #[derive(Parser)]
@@ -69,6 +69,32 @@ enum ClaudeCommands {
     Usage,
 }
 
+// macro to wrap a future and make it interruptible via Ctrl+C
+macro_rules! interruptible {
+    ($future:expr, $ctrl_c_state:expr) => {{
+        let future = $future;
+        let state = $ctrl_c_state;
+        let mut interval = tokio::time::interval(Duration::from_millis(50));
+
+        tokio::select! {
+            result = future => {
+                result.map_err(|e| anyhow::anyhow!("{}", e))
+            }
+            _ = async {
+                loop {
+                    interval.tick().await;
+                    let guard = state.lock().unwrap();
+                    if guard.interrupt_command {
+                        break;
+                    }
+                }
+            } => {
+                Err(anyhow::anyhow!("Command interrupted"))
+            }
+        }
+    }};
+}
+
 fn load_history(rl: &mut DefaultEditor) {
     let config = CliConfig::get();
     if let Err(e) = rl.load_history(&config.history_file_path) {
@@ -84,7 +110,6 @@ fn save_history(rl: &mut DefaultEditor) {
     if let Err(e) = rl.save_history(&config.history_file_path) {
         eprintln!("Warning: Could not save history: {}", e);
     }
-
 }
 
 #[derive(Debug, Clone)]
@@ -92,8 +117,10 @@ struct CtrlCState {
     count: u32,
     last_time: Option<Instant>,
     showing_message: bool,
-    force_exit: bool, // New field to signal force exit
-    ignore_next_input: bool,  // New field
+    force_exit: bool,
+    ignore_next_input: bool,
+    command_in_progress: bool,
+    interrupt_command: bool,
 }
 
 impl CtrlCState {
@@ -103,7 +130,9 @@ impl CtrlCState {
             last_time: None,
             showing_message: false,
             force_exit: false,
-            ignore_next_input:    false,
+            ignore_next_input: false,
+            command_in_progress: false,
+            interrupt_command: false,
         }
     }
 
@@ -113,6 +142,8 @@ impl CtrlCState {
         self.showing_message = false;
         self.force_exit = false;
         self.ignore_next_input = false;
+        self.command_in_progress = false;
+        self.interrupt_command = false;
     }
 }
 
@@ -139,7 +170,6 @@ async fn main() {
     println!("Type 'help' for available commands or 'exit' to quit.");
     println!("Press Ctrl+C twice quickly to force exit.\n");
 
-    // Create rustyline editor
     let mut rl = DefaultEditor::new().unwrap();
 
     load_history(&mut rl);
@@ -148,7 +178,6 @@ async fn main() {
 
     let ctrl_c_state = Arc::new(Mutex::new(CtrlCState::new()));
     let ctrl_c_timeout = Duration::from_secs(2);
-
     let state_clone = ctrl_c_state.clone();
     std::thread::spawn(move || loop {
         std::thread::sleep(Duration::from_millis(100));
@@ -170,15 +199,6 @@ async fn main() {
     loop {
         clear_message_if_showing(&ctrl_c_state);
 
-        {
-            let state = ctrl_c_state.lock().unwrap();
-
-            if state.force_exit {
-                println!("Force exiting...");
-                break;
-            }
-        }
-
         let readline: Result<String, ReadlineError>;
         if use_blank_prompt {
             readline = rl.readline("");
@@ -189,9 +209,11 @@ async fn main() {
 
         match readline {
             Ok(line) => {
+                // Mark command as starting
                 {
                     let mut state = ctrl_c_state.lock().unwrap();
                     state.reset();
+                    state.command_in_progress = true;
                 }
 
                 rl.add_history_entry(line.as_str()).unwrap();
@@ -200,7 +222,6 @@ async fn main() {
                     continue;
                 }
 
-                // Parse the command
                 let args = parse_quoted_args(&line);
                 if args.is_empty() {
                     continue;
@@ -211,7 +232,7 @@ async fn main() {
                 full_args.extend(args.iter().map(|s| s.as_str()));
 
                 match Cli::try_parse_from(full_args) {
-                    Ok(cli) => match execute_command(cli.command).await {
+                    Ok(cli) => match execute_command(cli.command, &ctrl_c_state).await {
                         Ok(should_continue) => {
                             if !should_continue {
                                 break;
@@ -222,7 +243,6 @@ async fn main() {
                         }
                     },
                     Err(e) => {
-                        // Handle parsing errors gracefully
                         if line == "help" {
                             show_help();
                         } else if line == "exit" || line == "quit" {
@@ -239,28 +259,44 @@ async fn main() {
                 let now = Instant::now();
                 let mut state = ctrl_c_state.lock().unwrap();
 
+                /*if state.command_in_progress {
+                    println!("Interrupting command...");
+                    state.interrupt_command = true;
+                    drop(state);
+                    continue;
+                }*/
+
+                if state.command_in_progress {
+                    println!("^C");
+                    println!("Interrupting command...");
+                    state.interrupt_command = true;
+                    drop(state);
+
+                    // Stay in a loop until command finishes or we need to force exit
+                    loop {
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                        let current_state = ctrl_c_state.lock().unwrap();
+
+                        // If command finished, break out and continue main loop
+                        if !current_state.command_in_progress {
+                            break;
+                        }
+
+                        // If user presses Ctrl+C again while waiting, we'll get another Interrupted
+                        // This will be handled in the next iteration
+                    }
+                    continue;
+                }
+
                 // Check if this is within the timeout window of the last Ctrl+C
                 let within_timeout = state
                     .last_time
                     .map(|last| now.duration_since(last) < ctrl_c_timeout)
                     .unwrap_or(false);
 
-                if within_timeout && state.showing_message {
-                    // This is the second Ctrl+C while message is showing
-                    state.force_exit = true;
-                    drop(state);
-                    continue; // Go back to main loop which will detect force_exit
-                }
-
                 if within_timeout {
-                    state.count += 1;
-                    if state.count >= 2 {
-                        println!("Force exiting...");
-                        break;
-                    }
-                } else {
-                    // Reset counter if too much time has passed
-                    state.count = 1;
+                    println!("Force exiting...");
+                    std::process::exit(0);
                 }
 
                 // Show the warning message below the current prompt
@@ -269,12 +305,6 @@ async fn main() {
                 state.showing_message = true;
                 state.last_time = Some(now);
                 drop(state);
-
-                //tokio::time::sleep(Duration::from_millis(100)).await;
-
-                // Simple approach: just wait for the next readline call
-                // The background thread will clear the message after 2 seconds
-                // The next iteration will handle any input (including Ctrl+C)
 
                 // Continue to next iteration which will call readline normally
                 continue;
@@ -288,23 +318,32 @@ async fn main() {
                 break;
             }
         }
+        // Mark command as finished
+        {
+            let mut state = ctrl_c_state.lock().unwrap();
+            state.command_in_progress = false;
+            state.interrupt_command = false;
+        }
     }
 
     save_history(&mut rl);
 }
 
-async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::Error>> {
+async fn execute_command(
+    command: Commands,
+    ctrl_c_state: &Mutex<CtrlCState>,
+) -> Result<bool, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
     match command {
         Commands::InitDb => {
             println!("Initializing database...");
-            let pool = create_database_pool(&config).await?;
-            init_database(&pool).await?;
+            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            interruptible!(init_database(&pool), ctrl_c_state)?;
             println!("✅ Database initialized successfully");
         }
         Commands::List => {
-            let pool = create_database_pool(&config).await?;
-            let prompts = get_all_prompts(&pool).await?;
+            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let prompts = interruptible!(get_all_prompts(&pool), ctrl_c_state)?;
 
             if prompts.is_empty() {
                 println!("No prompts found");
@@ -321,14 +360,21 @@ async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::
             }
         }
         Commands::Create { prompt } => {
-            let pool = create_database_pool(&config).await?;
-            let result = create_prompt_record(&pool, prompt, None, None).await?;
+            //let pool = create_database_pool(&config).await?;
+            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let result = interruptible!(
+                create_prompt_record(&pool, prompt, None, None),
+                ctrl_c_state
+            )?;
             println!("✅ Created prompt with ID: {}", result.id);
         }
         Commands::Claude { action } => match action {
             ClaudeCommands::Prompt { prompt, model } => {
-                let pool = create_database_pool(&config).await?;
-                match core::call_claude(&prompt, model.as_deref(), &pool).await {
+                let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+                match interruptible!(
+                    core::call_claude(&prompt, model.as_deref(), &pool),
+                    ctrl_c_state
+                ) {
                     Ok(response) => {
                         println!("✅ Claude response:");
                         if let Some(ref resp) = response.response {
@@ -343,17 +389,19 @@ async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::
                     }
                 }
             }
-            ClaudeCommands::GetModels => match core::get_claude_models().await {
-                Ok(models) => {
-                    println!("Available Claude models:");
-                    for model in models {
-                        println!(" - {} ({})", model.display_name, model.id);
+            ClaudeCommands::GetModels => {
+                match interruptible!(core::get_claude_models(), ctrl_c_state) {
+                    Ok(models) => {
+                        println!("Available Claude models:");
+                        for model in models {
+                            println!(" - {} ({})", model.display_name, model.id);
+                        }
+                    }
+                    Err(e) => {
+                        eprintln!("❌ Error fetching models: {}", e);
                     }
                 }
-                Err(e) => {
-                    eprintln!("❌ Error fetching models: {}", e);
-                }
-            },
+            }
             ClaudeCommands::Usage => {
                 println!("Claude command help:");
                 println!("  prompt -p <prompt> [-m <model>]   Send a prompt to Claude");
@@ -363,16 +411,12 @@ async fn execute_command(command: Commands) -> Result<bool, Box<dyn std::error::
         },
         Commands::Status => {
             println!("Checking database connection...");
-            let _pool = create_database_pool(&config).await?;
+            let _pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
             println!("✅ Database connection successful");
             println!("Database URL: {}", &config.database_url);
         }
         Commands::Usage => {
             show_help();
-        }
-        Commands::Exit => {
-            println!("Goodbye!");
-            return Ok(false); // Signal to exit the loop
         }
     }
     Ok(true) // Continue the loop
