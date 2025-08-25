@@ -16,4 +16,4 @@ dotenvy = "0.15"
 anyhow = "1.0"
 # web requests
 reqwest = { version = "0.11", features = ["json"] }
-dirs = "6.0.0"
+strum = { version = "0.27" , features = ["derive"] }

@@ -1,6 +1,8 @@
+use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use strum::{Display, EnumIter, IntoEnumIterator};
 
 // maps the json containing the prompt into this struct
 #[derive(Deserialize)]
@@ -30,4 +32,36 @@ pub struct CreatePromptResponse {
 #[derive(Serialize)]
 pub struct ErrorResponse {
     pub error: String,
+}
+
+#[derive(Display, EnumIter)]
+pub enum Provider {
+    #[strum(to_string = "Anthropic")]
+    Anthropic,
+ //  #[strum(to_string = "OpenAI")]
+ //   OpenAI,
+}
+
+impl FromStr for Provider {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "claude" => Ok(Provider::Anthropic),
+            //"chatgpt" => Ok(Providers::OpenAI),
+            _ => Err(format!("Unknown provider: {}", s)),
+        }
+    }
+}
+
+impl Provider {
+    pub fn all() -> Vec<Provider> {
+        Provider::iter().collect()
+    }
+
+    pub fn all_names() -> Vec<String> {
+        Provider::iter()
+            .map(|p| p.to_string())
+            .collect()
+    }
 }
