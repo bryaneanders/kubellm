@@ -1,7 +1,7 @@
 // load the config struct the config module
 use crate::config::CoreConfig;
 // load these struts from the models module
-use crate::models::{CreatePromptResponse, Prompt};
+use crate::models::Prompt;
 // load error handling and result types
 use anyhow::{Context, Result};
 // date and time handling
@@ -48,7 +48,7 @@ pub async fn create_prompt_record(
     prompt: String,
     response: Option<&str>, // save the response or null if not provided
     model: Option<&str>, // save the model or null if not provided
-) -> Result<CreatePromptResponse, sqlx::Error> {
+) -> Result<Prompt, sqlx::Error> {
     let insert_result = sqlx::query(
         "INSERT INTO prompts (prompt, response, model, created_at) VALUES (?, ?, ?, ?)"
     )
@@ -70,7 +70,7 @@ pub async fn create_prompt_record(
 
     let naive_datetime: NaiveDateTime = row.get("created_at");
 
-    Ok(CreatePromptResponse {
+    Ok(Prompt {
         id: row.get("id"),
         prompt: row.get("prompt"),
         response: row.get("response"),
@@ -82,7 +82,7 @@ pub async fn create_prompt_record(
 
 pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Error> {
     let rows = sqlx::query(
-        "SELECT id, prompt, created_at FROM prompts ORDER BY created_at DESC"
+        "SELECT id, prompt, response, model, created_at FROM prompts ORDER BY created_at DESC"
     )
         .fetch_all(pool)
         .await?;
@@ -92,6 +92,8 @@ pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Erro
         Prompt {
             id: row.get("id"),
             prompt: row.get("prompt"),
+            response: row.get("response"),
+            model: row.get("model"),
             created_at: naive_datetime.and_utc(),
         }
     }).collect();

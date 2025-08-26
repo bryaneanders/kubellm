@@ -18,13 +18,6 @@ pub struct CreatePromptRequest {
 pub struct Prompt {
     pub id: i64,
     pub prompt: String,
-    pub created_at: DateTime<Utc>,
-}
-
-#[derive(Serialize)]
-pub struct CreatePromptResponse {
-    pub id: i64,
-    pub prompt: String,
     pub model: String,
     pub response: Option<String>,
     pub created_at: DateTime<Utc>,

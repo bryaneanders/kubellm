@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use crate::{CoreConfig, CreatePromptResponse};
+use crate::{CoreConfig, Prompt};
 use reqwest::Client;
 use sqlx::MySqlPool;
 use crate::create_prompt_record;
@@ -57,7 +57,7 @@ struct AnthropicModelsResponse {
 }
 
 pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,
-) -> Result<CreatePromptResponse, Box<dyn std::error::Error>> {
+) -> Result<Prompt, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
     let client = Client::new();
 

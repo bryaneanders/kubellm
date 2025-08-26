@@ -5,7 +5,7 @@ use axum::Json;
 use sqlx::MySqlPool;
 
 use core::{
-    CreatePromptRequest, CreatePromptResponse, ErrorResponse, Prompt, GetModelsQuery,
+    CreatePromptRequest, Prompt, ErrorResponse, GetModelsQuery,
     get_all_prompts, prompt_model, get_models
 };
 
@@ -19,7 +19,7 @@ type DatabaseConnection = Arc<MySqlPool>;
 pub async fn create_prompt_handler(
     State(pool): State<DatabaseConnection>, // extract db pool from api state (set in router declaration)
     Json(payload): Json<CreatePromptRequest>, // extract prompt json from request
-) -> anyhow::Result<Json<CreatePromptResponse>, (StatusCode, Json<ErrorResponse>)> {
+) -> anyhow::Result<Json<Prompt>, (StatusCode, Json<ErrorResponse>)> {
     if payload.prompt.trim().is_empty() {
         return Err((
             StatusCode::BAD_REQUEST,
@@ -43,6 +43,8 @@ pub async fn create_prompt_handler(
     }
 }
 
+// Dunno why its marked dead code
+#[allow(dead_code)]
 pub async fn get_models_handler(
     Query(params): Query<GetModelsQuery>,
 ) -> anyhow::Result<Json<Vec<String>>, (StatusCode, Json<ErrorResponse>)> {

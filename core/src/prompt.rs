@@ -1,11 +1,11 @@
-use crate::models::{Provider, CreatePromptResponse};
+use crate::models::{Provider, Prompt};
 use crate::claude;
 use sqlx::MySqlPool;
 use std::str::FromStr;
 
 // prompt the provider - model optional
 pub async fn prompt_model(prompt: &str, provider: &str, model: Option<&str>, pool: &MySqlPool,
-) -> Result<CreatePromptResponse, Box<dyn std::error::Error>> {
+) -> Result<Prompt, Box<dyn std::error::Error>> {
 
     match Provider::from_str(provider) {
         Ok(provider) => {
