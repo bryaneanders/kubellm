@@ -42,13 +42,13 @@ enum Commands {
         #[arg(short, long)]
         model: Option<String>,
         /// The model provider to use
-        #[arg(short, long)]
+        #[arg(short = 'r', long)]
         provider: String,
     },
     /// Get a provider's list of models
     GetModels {
         /// The model provider to use
-        #[arg(short, long)]
+        #[arg(short = 'r', long)]
         provider: String,
     },
     /// Get a list of providers
@@ -352,8 +352,6 @@ async fn execute_command(
             }
         }
         Commands::Prompt { prompt, model, provider } => {
-            // Create core prompt function
-            //let pool = create_database_pool(&config).await?;
             let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
             match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), ctrl_c_state) {
                 Ok(response) => {
@@ -392,7 +390,7 @@ async fn execute_command(
             let providers = Provider::all();
             println!("Available providers:");
             for provider in providers {
-                println!("-{}", provider);
+                println!("- {}", provider);
             }
         }
         Commands::Status => {

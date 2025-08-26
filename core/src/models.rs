@@ -8,6 +8,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 #[derive(Deserialize)]
 pub struct CreatePromptRequest {
     pub prompt: String,
+    pub provider: String,
     pub model: Option<String>
 }
 
@@ -34,6 +35,11 @@ pub struct ErrorResponse {
     pub error: String,
 }
 
+#[derive(Deserialize)]
+pub struct GetModelsQuery {
+    pub provider: String,
+}
+
 #[derive(Display, EnumIter)]
 pub enum Provider {
     #[strum(to_string = "Anthropic")]
@@ -47,8 +53,8 @@ impl FromStr for Provider {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
-            "claude" => Ok(Provider::Anthropic),
-            //"chatgpt" => Ok(Providers::OpenAI),
+            "anthropic" => Ok(Provider::Anthropic),
+            //"openai" => Ok(Providers::OpenAI),
             _ => Err(format!("Unknown provider: {}", s)),
         }
     }

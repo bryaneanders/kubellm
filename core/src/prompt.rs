@@ -30,7 +30,7 @@ pub async fn get_models(provider: &str
                 Provider::Anthropic => match claude::get_claude_models().await {
                     Ok(models) => {
                         let model_names = models.into_iter()
-                            .map(|m| m.display_name)
+                            .map(|m| m.id)
                             .collect();
                         Ok(model_names)
                     },
