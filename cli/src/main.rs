@@ -1,6 +1,5 @@
 mod config;
 
-use anyhow::Result;
 // import modules to parse cli arguments and subcommands
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
@@ -56,6 +55,7 @@ enum Commands {
     /// Show database connection status
     Status,
     /// Show usage information
+    TestInterrupt,
     Usage,
     /// Exit the application
     Exit,
@@ -106,10 +106,8 @@ fn save_history(rl: &mut DefaultEditor) {
 
 #[derive(Debug, Clone)]
 struct CtrlCState {
-    count: u32,
     last_time: Option<Instant>,
     showing_message: bool,
-    force_exit: bool,
     ignore_next_input: bool,
     command_in_progress: bool,
     interrupt_command: bool,
@@ -118,10 +116,8 @@ struct CtrlCState {
 impl CtrlCState {
     fn new() -> Self {
         Self {
-            count: 0,
             last_time: None,
             showing_message: false,
-            force_exit: false,
             ignore_next_input: false,
             command_in_progress: false,
             interrupt_command: false,
@@ -129,10 +125,8 @@ impl CtrlCState {
     }
 
     fn reset(&mut self) {
-        self.count = 0;
         self.last_time = None;
         self.showing_message = false;
-        self.force_exit = false;
         self.ignore_next_input = false;
         self.command_in_progress = false;
         self.interrupt_command = false;
@@ -156,204 +150,324 @@ fn clear_message_if_showing(state: &Arc<Mutex<CtrlCState>>) {
     }
 }
 
+#[derive(Debug)]
+enum InputEvent {
+    Command(String),
+    CtrlC,
+    Exit,
+}
+
 #[tokio::main]
 async fn main() {
     println!("Welcome to MyApp Interactive CLI!");
     println!("Type 'help' for available commands or 'exit' to quit.");
     println!("Press Ctrl+C twice quickly to force exit.\n");
 
-    let mut rl = DefaultEditor::new().unwrap();
-
-    load_history(&mut rl);
-
-    let mut use_blank_prompt = false;
-
     let ctrl_c_state = Arc::new(Mutex::new(CtrlCState::new()));
     let ctrl_c_timeout = Duration::from_secs(2);
-    let state_clone = ctrl_c_state.clone();
-    std::thread::spawn(move || loop {
-        std::thread::sleep(Duration::from_millis(100));
-        let mut state = state_clone.lock().unwrap();
 
-        if state.showing_message {
-            if let Some(last_time) = state.last_time {
-                if Instant::now().duration_since(last_time) >= ctrl_c_timeout {
-                    print!("\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[2A\x1b[13G");
-                    io::stdout().flush().unwrap();
-                    state.reset();
-                    state.ignore_next_input = true; // Set flag to ignore next input
+    // Channel for communication between rustyline and main async task
+    let (input_tx, mut input_rx) = tokio::sync::mpsc::unbounded_channel::<InputEvent>();
+
+    // Spawn rustyline in a blocking thread (always listening)
+    let input_tx_clone = input_tx.clone();
+
+    std::thread::spawn(move || {
+        let mut rl = DefaultEditor::new().unwrap();
+        load_history(&mut rl);
+
+        loop {
+            match rl.readline("prompt-cli> ") {
+                Ok(line) => {
+                    rl.add_history_entry(line.as_str()).unwrap();
+                    if input_tx_clone.send(InputEvent::Command(line)).is_err() {
+                        break; // Main task has stopped
+                    }
+                }
+                Err(ReadlineError::Interrupted) => {
+                    if input_tx_clone.send(InputEvent::CtrlC).is_err() {
+                        break; // Main task has stopped
+                    }
+                }
+                Err(ReadlineError::Eof) => {
+                    let _ = input_tx_clone.send(InputEvent::Exit);
+                    break;
+                }
+                Err(error) => {
+                    eprintln!("Readline error: {}", error);
+                    break;
+                }
+            }
+        }
+
+        save_history(&mut rl);
+    });
+
+    // Background task to clear Ctrl+C timeout messages
+    let ctrl_c_state_clone = ctrl_c_state.clone();
+    tokio::spawn(async move {
+        let mut interval = tokio::time::interval(Duration::from_millis(100));
+        loop {
+            interval.tick().await;
+            let mut state = ctrl_c_state_clone.lock().unwrap();
+
+            if state.showing_message {
+                if let Some(last_time) = state.last_time {
+                    if Instant::now().duration_since(last_time) >= ctrl_c_timeout {
+                        // Clear the message
+                        print!("\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[2A");
+                        io::stdout().flush().unwrap();
+                        state.showing_message = false;
+                        state.last_time = None;
+                    }
                 }
             }
         }
     });
 
-    // Main interactive loop
+    // Main async loop - handles both commands and input
     loop {
-        clear_message_if_showing(&ctrl_c_state);
+        tokio::select! {
+            // Handle input from rustyline
+            input_event = input_rx.recv() => {
+                match input_event {
+                    Some(InputEvent::Command(line)) => {
+                        if line.trim().is_empty() {
+                            continue;
+                        }
 
-        let readline: Result<String, ReadlineError>;
-        if use_blank_prompt {
-            readline = rl.readline("");
-            use_blank_prompt = false;
-        } else {
-            readline = rl.readline("prompt-cli> ");
-        }
-
-        match readline {
-            Ok(line) => {
-                // Mark command as starting
-                {
-                    let mut state = ctrl_c_state.lock().unwrap();
-                    state.reset();
-                    state.command_in_progress = true;
-                }
-
-                rl.add_history_entry(line.as_str()).unwrap();
-
-                if line.trim().is_empty() {
-                    continue;
-                }
-
-                let args = parse_quoted_args(&line);
-                if args.is_empty() {
-                    continue;
-                }
-
-                // Prepend the program name for clap parsing
-                let mut full_args = vec!["prompt-cli"];
-                full_args.extend(args.iter().map(|s| s.as_str()));
-
-                match Cli::try_parse_from(full_args) {
-                    Ok(cli) => match execute_command(cli.command, &ctrl_c_state).await {
-                        Ok(should_continue) => {
-                            if !should_continue {
-                                break;
+                        // Reset Ctrl+C state on new command
+                        {
+                            let mut state = ctrl_c_state.lock().unwrap();
+                            state.last_time = None;
+                            state.interrupt_command = false;
+                            if state.showing_message {
+                                // Clear any existing message
+                                print!("\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[2A");
+                                io::stdout().flush().unwrap();
+                                state.showing_message = false;
                             }
                         }
-                        Err(e) => {
-                            eprintln!("❌ Error executing command: {}", e);
+
+                        // Parse and execute command
+                        let args = parse_quoted_args(&line);
+                        if args.is_empty() {
+                            continue;
                         }
-                    },
-                    Err(e) => {
-                        if line == "help" {
-                            show_help();
-                        } else if line == "exit" || line == "quit" {
-                            println!("Goodbye!");
-                            break;
-                        } else {
-                            println!("Error: {}", e);
-                            println!("Type 'help' for available commands.");
+
+                        let mut full_args = vec!["prompt-cli"];
+                        full_args.extend(args.iter().map(|s| s.as_str()));
+
+                        match Cli::try_parse_from(full_args) {
+                            Ok(cli) => {
+                                // Mark command as starting
+                                {
+                                    let mut state = ctrl_c_state.lock().unwrap();
+                                    state.command_in_progress = true;
+                                    state.interrupt_command = false;
+                                }
+
+                                // Spawn command execution in separate task so main loop stays responsive
+                                let ctrl_c_state_clone = ctrl_c_state.clone();
+                                let mut command_handle = tokio::spawn(async move {
+                                    execute_command(cli.command, ctrl_c_state_clone).await
+                                });
+
+                                // Wait for either command completion or keep processing other events
+                                let mut command_finished = false;
+                                while !command_finished {
+                                    tokio::select! {
+                                        // Command completed
+                                        result = &mut command_handle => {
+                                            command_finished = true;
+
+                                            // Mark command as finished
+                                            {
+                                                let mut state = ctrl_c_state.lock().unwrap();
+                                                state.command_in_progress = false;
+                                                state.interrupt_command = false;
+                                            }
+
+                                            match result {
+                                                Ok(Ok(should_continue)) => {
+                                                    if !should_continue {
+                                                        return; // Exit main loop
+                                                    }
+                                                }
+                                                Ok(Err(e)) => {
+                                                    if e.to_string().contains("interrupted") {
+                                                        print!("\r\x1b[2K\x1b[1A\x1b[2K"); // Move to start and clear line
+                                                        io::stdout().flush().unwrap();
+                                                        //println!("^C");
+                                                        println!("Command was interrupted");
+                                                        print!("\r\x1b[1A\x1b[25C");
+                                                        io::stdout().flush().unwrap();
+                                                    } else {
+                                                        eprintln!("❌ Error executing command: {}", e);
+                                                    }
+                                                }
+                                                Err(e) => {
+                                                    eprintln!("❌ Command task failed: {}", e);
+                                                }
+                                            }
+                                        }
+
+                                        // Handle more input while command is running
+                                        input_event = input_rx.recv() => {
+                                            match input_event {
+                                                Some(InputEvent::CtrlC) => {
+                                                    let now = Instant::now();
+                                                    let mut state = ctrl_c_state.lock().unwrap();
+
+                                                    if state.command_in_progress {
+                                                        //print!("\r\x1b[2K");
+                                                       // print!("\r\x1b[2K\x1b[2A\x1b[2K");
+                                                        //io::stdout().flush().unwrap();
+                                                        //println!("^C");
+                                                        print!("Interrupting command...");
+                                                        state.interrupt_command = true;
+                                                        // Continue loop to wait for command to actually stop
+                                                    } else {
+                                                        // Handle double Ctrl+C logic
+                                                        let within_timeout = state.last_time
+                                                            .map(|last| now.duration_since(last) < ctrl_c_timeout)
+                                                            .unwrap_or(false);
+
+                                                        if within_timeout {
+                                                            println!("Force exiting...");
+                                                            return; // Exit main loop
+                                                        }
+
+                                                        println!("Press Ctrl+C again within 2 seconds to force exit...");
+                                                        state.last_time = Some(now);
+                                                        state.showing_message = true;
+                                                    }
+                                                }
+                                                Some(InputEvent::Command(line)) => {
+                                                    // User tried to run another command while one is running
+                                                    //println!("⚠️ Command '{}' ignored - another command is still running. Press Ctrl+C to interrupt it.", line.trim());
+                                                    continue;
+                                                }
+                                                Some(InputEvent::Exit) => {
+                                                    println!("Goodbye!");
+                                                    return; // Exit main loop
+                                                }
+                                                None => {
+                                                    println!("Input channel closed, exiting...");
+                                                    return; // Exit main loop
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Err(e) => {
+                                if line == "help" {
+                                    show_help();
+                                } else if line == "exit" || line == "quit" {
+                                    println!("Goodbye!");
+                                    break;
+                                } else {
+                                    println!("Error: {}", e);
+                                    println!("Type 'help' for available commands.");
+                                }
+                            }
                         }
+                    }
+
+                    Some(InputEvent::CtrlC) => {
+                        let now = Instant::now();
+                        let mut state = ctrl_c_state.lock().unwrap();
+
+                        // This only handles Ctrl+C when NO command is running
+                        if !state.command_in_progress {
+                            // Handle double Ctrl+C for exit
+                            let within_timeout = state.last_time
+                                .map(|last| now.duration_since(last) < ctrl_c_timeout)
+                                .unwrap_or(false);
+
+                            if within_timeout {
+                                println!("Force exiting...");
+                                break;
+                            }
+
+                            println!("Press Ctrl+C again within 2 seconds to force exit...");
+                            state.last_time = Some(now);
+                            state.showing_message = true;
+                        }
+                        // If command is running, Ctrl+C is handled in the command execution loop above
+                    }
+
+                    Some(InputEvent::Exit) => {
+                        println!("Goodbye!");
+                        break;
+                    }
+
+                    None => {
+                        println!("Input channel closed, exiting...");
+                        break; // Channel closed
                     }
                 }
             }
-            Err(ReadlineError::Interrupted) => {
-                let now = Instant::now();
-                let mut state = ctrl_c_state.lock().unwrap();
-
-                /*if state.command_in_progress {
-                    println!("Interrupting command...");
-                    state.interrupt_command = true;
-                    drop(state);
-                    continue;
-                }*/
-
-                if state.command_in_progress {
-                    println!("^C");
-                    println!("Interrupting command...");
-                    state.interrupt_command = true;
-                    drop(state);
-
-                    // Stay in a loop until command finishes or we need to force exit
-                    loop {
-                        tokio::time::sleep(Duration::from_millis(100)).await;
-                        let current_state = ctrl_c_state.lock().unwrap();
-
-                        // If command finished, break out and continue main loop
-                        if !current_state.command_in_progress {
-                            break;
-                        }
-
-                        // If user presses Ctrl+C again while waiting, we'll get another Interrupted
-                        // This will be handled in the next iteration
-                    }
-                    continue;
-                }
-
-                // Check if this is within the timeout window of the last Ctrl+C
-                let within_timeout = state
-                    .last_time
-                    .map(|last| now.duration_since(last) < ctrl_c_timeout)
-                    .unwrap_or(false);
-
-                if within_timeout {
-                    println!("Force exiting...");
-                    std::process::exit(0);
-                }
-
-                // Show the warning message below the current prompt
-                println!("Press Ctrl+C again within 2 seconds to force exit...");
-                use_blank_prompt = true;
-                state.showing_message = true;
-                state.last_time = Some(now);
-                drop(state);
-
-                // Continue to next iteration which will call readline normally
-                continue;
-            }
-            Err(ReadlineError::Eof) => {
-                println!("Goodbye!");
-                break;
-            }
-            Err(error) => {
-                println!("Error: {}", error);
-                break;
-            }
-        }
-        // Mark command as finished
-        {
-            let mut state = ctrl_c_state.lock().unwrap();
-            state.command_in_progress = false;
-            state.interrupt_command = false;
         }
     }
-
-    save_history(&mut rl);
 }
 
 async fn execute_command(
     command: Commands,
-    ctrl_c_state: &Mutex<CtrlCState>,
-) -> Result<bool, Box<dyn std::error::Error>> {
+    ctrl_c_state: Arc<Mutex<CtrlCState>>
+) -> anyhow::Result<bool> {  // Changed from Result<bool> to anyhow::Result<bool>
     let config = CoreConfig::get();
     match command {
         Commands::InitDb => {
             println!("Initializing database...");
-            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            interruptible!(init_database(&pool), ctrl_c_state)?;
+
+            let pool = interruptible!(
+                create_database_pool(&config),
+                &ctrl_c_state
+            )?;
+
+            interruptible!(
+                init_database(&pool),
+                &ctrl_c_state
+            )?;
+
             println!("✅ Database initialized successfully");
         }
         Commands::List => {
-            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            let prompts = interruptible!(get_all_prompts(&pool), ctrl_c_state)?;
+            let pool = interruptible!(
+                create_database_pool(&config),
+                &ctrl_c_state
+            )?;
+
+            let prompts = interruptible!(
+                get_all_prompts(&pool),
+                &ctrl_c_state
+            )?;
 
             if prompts.is_empty() {
                 println!("No prompts found");
             } else {
                 println!("Found {} prompts:", prompts.len());
                 for prompt in prompts {
-                    println!(
-                        "  [{}] {}: {}",
-                        prompt.id,
-                        prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
-                        prompt.prompt
+                    println!("  [{}] {}: {}",
+                             prompt.id,
+                             prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
+                             prompt.prompt
                     );
+                    // Quick check for interruption during output
+                    {
+                        let state = ctrl_c_state.lock().unwrap();
+                        if state.interrupt_command {
+                            return Err(anyhow::anyhow!("Command interrupted"));
+                        }
+                    }
                 }
             }
         }
         Commands::Prompt { prompt, model, provider } => {
             let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), ctrl_c_state) {
+            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), &ctrl_c_state) {
                 Ok(response) => {
                     println!("✅ Response:");
                     if let Some(ref resp) = response.response {
@@ -395,7 +509,10 @@ async fn execute_command(
         }
         Commands::Status => {
             println!("Checking database connection...");
-            let _pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let _pool = interruptible!(
+                create_database_pool(&config),
+                &ctrl_c_state
+            )?;
             println!("✅ Database connection successful");
             println!("Database URL: {}", &config.database_url);
         }
@@ -404,7 +521,26 @@ async fn execute_command(
         }
         Commands::Exit => {
             println!("Goodbye!");
-            return Ok(false); // Exit the loop
+            return Ok(false); // Signal to exit the loop
+        }
+        Commands::TestInterrupt => {
+            println!("Starting 10-second test... (press Ctrl+C to interrupt)");
+
+            let test_result = interruptible!(
+                async {
+                    for i in 0..10 {
+                        println!("Test step {}...", i + 1);
+                        tokio::time::sleep(Duration::from_secs(1)).await;
+                    }
+                    Ok::<(), anyhow::Error>(())
+                },
+                &ctrl_c_state
+            );
+
+            match test_result {
+                Ok(_) => println!("✅ Test completed successfully"),
+                Err(e) => println!("❌ Test interrupted: {}", e),
+            }
         }
     }
     Ok(true) // Continue the loop
