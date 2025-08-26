@@ -1,4 +1,3 @@
-mod claude;
 mod prompt;
 
 use axum::{
@@ -11,8 +10,7 @@ use core::{
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 use anyhow::{Context, Result};
-use prompts_api::ApiConfig;
-use crate::claude::{claude_prompt_handler, claude_models_handler};
+use prompts_api::{get_models_handler, ApiConfig};
 use crate::prompt::{create_prompt_handler, get_prompts_handler,};
 
 async fn health_check() -> &'static str {
@@ -43,10 +41,9 @@ async fn main() -> Result<()> {
     // initialize app with routes
     let app = Router::new()
         .route("/health", get(health_check))
-        .route("/prompts", post(create_prompt_handler))
+        .route("/prompt", post(create_prompt_handler))
         .route("/prompts", get(get_prompts_handler))
-        .route("/claude/prompt", post(claude_prompt_handler))
-        .route("/claude/models", get(claude_models_handler))
+        .route("/get-models", get(get_models_handler))
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 
@@ -56,9 +53,9 @@ async fn main() -> Result<()> {
         .context(format!("Failed to bind to {}", bind_address))?;
 
     println!("🚀 Server running on http://{}", bind_address);
-    println!("📝 POST to /prompts to create a prompt");
+    println!("📝 POST to /prompt to create a prompt");
     println!("📋 GET /prompts to view all prompts");
-    println!("📋 GET /prompt_claude to prompt Anthropic's Claude");
+    println!("⚛️ GET /models to view a provider's models");
     println!("❤️ GET /health for health check");
 
     axum::serve(listener, app)

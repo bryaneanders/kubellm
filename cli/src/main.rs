@@ -6,7 +6,8 @@ use clap::{Parser, Subcommand};
 // import necessary modules from the core library
 use crate::config::CliConfig;
 use core::{
-    create_database_pool, create_prompt_record, get_all_prompts, init_database, CoreConfig,
+    create_database_pool, get_all_prompts, init_database,
+    get_models, prompt_model, CoreConfig, Provider
 };
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -32,41 +33,32 @@ enum Commands {
     InitDb,
     /// List all prompts
     List,
-    /// Create a new prompt
-    Create {
+    /// Create a new prompt for a provider
+    Prompt {
         /// The prompt content
         #[arg(short, long)]
         prompt: String,
+        /// The model to use
+        #[arg(short, long)]
+        model: Option<String>,
+        /// The model provider to use
+        #[arg(short = 'r', long)]
+        provider: String,
     },
-
-    /// Interact with Anthropic's Claude models
-    Claude {
-        #[command(subcommand)]
-        action: ClaudeCommands,
+    /// Get a provider's list of models
+    GetModels {
+        /// The model provider to use
+        #[arg(short = 'r', long)]
+        provider: String,
     },
+    /// Get a list of providers
+    GetProviders,
     /// Show database connection status
     Status,
     /// Show usage information
     Usage,
     /// Exit the application
     Exit,
-}
-
-#[derive(Subcommand)]
-enum ClaudeCommands {
-    /// Send a prompt to Claude
-    Prompt {
-        /// The prompt content
-        #[arg(short, long)]
-        prompt: String,
-        /// Model to use
-        #[arg(short, long)]
-        model: Option<String>,
-    },
-    /// Get available models
-    GetModels,
-    /// Usage of Claude commands
-    Usage,
 }
 
 // macro to wrap a future and make it interruptible via Ctrl+C
@@ -359,56 +351,48 @@ async fn execute_command(
                 }
             }
         }
-        Commands::Create { prompt } => {
-            //let pool = create_database_pool(&config).await?;
+        Commands::Prompt { prompt, model, provider } => {
             let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            let result = interruptible!(
-                create_prompt_record(&pool, prompt, None, None),
-                ctrl_c_state
-            )?;
-            println!("✅ Created prompt with ID: {}", result.id);
+            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), ctrl_c_state) {
+                Ok(response) => {
+                    println!("✅ Response:");
+                    if let Some(ref resp) = response.response {
+                        println!("{}", resp);
+                    } else {
+                        println!("No response received");
+                    }
+                    println!("Prompt ID: {}", response.id);
+                }
+                Err(e) => {
+                    eprintln!("❌ Error calling model: {}", e);
+                    return Ok(true);
+                }
+            }
         }
-        Commands::Claude { action } => match action {
-            ClaudeCommands::Prompt { prompt, model } => {
-                let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-                match interruptible!(
-                    core::call_claude(&prompt, model.as_deref(), &pool),
-                    ctrl_c_state
-                ) {
-                    Ok(response) => {
-                        println!("✅ Claude response:");
-                        if let Some(ref resp) = response.response {
-                            println!("{}", resp);
-                        } else {
-                            println!("(No response received)");
-                        }
-                        println!("Prompt ID: {}", response.id);
-                    }
-                    Err(e) => {
-                        eprintln!("❌ Error calling Claude: {}", e);
-                    }
-                }
-            }
-            ClaudeCommands::GetModels => {
-                match interruptible!(core::get_claude_models(), ctrl_c_state) {
-                    Ok(models) => {
-                        println!("Available Claude models:");
+        Commands::GetModels { provider } => {
+            match interruptible!(get_models(&provider), ctrl_c_state) {
+                Ok(models) => {
+                    if models.is_empty() {
+                        println!("No models found for provider '{}'", provider);
+                    } else {
+                        println!("Available models for provider '{}':", provider);
                         for model in models {
-                            println!(" - {} ({})", model.display_name, model.id);
+                            println!(" - {}", model);
                         }
                     }
-                    Err(e) => {
-                        eprintln!("❌ Error fetching models: {}", e);
-                    }
                 }
-            }
-            ClaudeCommands::Usage => {
-                println!("Claude command help:");
-                println!("  prompt -p <prompt> [-m <model>]   Send a prompt to Claude");
-                println!("  get-models                        Get available models");
-                println!("  help                              Show this help message");
+                Err(e) => {
+                    eprintln!("❌ Error fetching models: {}", e);
+                }
             }
         },
+        Commands::GetProviders => {
+            let providers = Provider::all();
+            println!("Available providers:");
+            for provider in providers {
+                println!("- {}", provider);
+            }
+        }
         Commands::Status => {
             println!("Checking database connection...");
             let _pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
@@ -478,18 +462,17 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
 
 fn show_help() {
     println!("Available commands:");
-    println!("  init-db                          Initialize the database");
-    println!("  list                             List all prompts");
-    println!("  create -p <prompt>               Create a new prompt");
-    println!("  claude prompt -p <prompt>        Send a prompt to Claude");
-    println!("  claude prompt -p <prompt> -m <model>  Send a prompt with specific model");
-    println!("  claude get-models                Get available models");
-    println!("  status                           Show database connection status");
-    println!("  help                             Show this help message");
-    println!("  exit                             Exit the application");
+    println!("  init-db                                         Initialize the database");
+    println!("  list                                            List all prompts");
+    println!("  get-providers                                   Get available model providers");
+    println!("  get-models -r <provider>                        Get available models for a provider");
+    println!("  prompt -p <prompt> -r <provider> [-m <model>]   Create a new prompt");
+    println!("  status                                          Show database connection status");
+    println!("  help                                            Show this help message");
+    println!("  exit                                            Exit the application");
     println!();
     println!("Examples:");
-    println!("  create -p \"My new prompt\"");
-    println!("  claude prompt -p \"Hello Claude\"");
-    println!("  claude prompt -p \"Hello\" -m \"claude-sonnet-4-20250514\"");
+    println!("  prompt -p \"What is 2 + 2?\" -r anthropic");
+    println!("  prompt -p \"What is 2 + 2?\" -r anthropic -m claude-sonnet-4-20250514");
+    println!("  get-models -r anthropic");
 }
