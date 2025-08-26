@@ -108,7 +108,6 @@ fn save_history(rl: &mut DefaultEditor) {
 struct CtrlCState {
     last_time: Option<Instant>,
     showing_message: bool,
-    ignore_next_input: bool,
     command_in_progress: bool,
     interrupt_command: bool,
 }
@@ -118,35 +117,9 @@ impl CtrlCState {
         Self {
             last_time: None,
             showing_message: false,
-            ignore_next_input: false,
             command_in_progress: false,
             interrupt_command: false,
         }
-    }
-
-    fn reset(&mut self) {
-        self.last_time = None;
-        self.showing_message = false;
-        self.ignore_next_input = false;
-        self.command_in_progress = false;
-        self.interrupt_command = false;
-    }
-}
-
-fn clear_message_if_showing(state: &Arc<Mutex<CtrlCState>>) {
-    let mut state_lock = state.lock().unwrap();
-    if state_lock.showing_message {
-        // Don't clear if the message was just shown (within last 200ms)
-        if let Some(last_time) = state_lock.last_time {
-            if Instant::now().duration_since(last_time) < Duration::from_millis(200) {
-                return; // Don't clear yet, message is still fresh
-            }
-        }
-
-        print!("\x1b[s\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[1A\r");
-        io::stdout().flush().unwrap();
-        state_lock.showing_message = false;
-        state_lock.ignore_next_input = true; // Set flag to ignore next input
     }
 }
 
@@ -171,22 +144,74 @@ async fn main() {
 
     // Spawn rustyline in a blocking thread (always listening)
     let input_tx_clone = input_tx.clone();
+    let rusty_ctrl_c_state_clone = ctrl_c_state.clone();
 
     std::thread::spawn(move || {
         let mut rl = DefaultEditor::new().unwrap();
         load_history(&mut rl);
 
         loop {
-            match rl.readline("prompt-cli> ") {
+            let prompt : &str;
+            let state = rusty_ctrl_c_state_clone.lock().unwrap();
+
+            //println!("Debug: CtrlCState: {:?}", *state);
+            // when I ctrl+c it prompts again before the state is set
+            if !state.interrupt_command && !state.showing_message {
+                print!("\x1b[?25h"); // Show cursor
+                io::stdout().flush().unwrap();
+                prompt = "\x1b[32mprompt-cli>\x1b[97m ";
+            } else {
+                print!("\x1b[?25l"); // Hide cursor
+                io::stdout().flush().unwrap();
+                prompt = "";
+            }
+            drop(state);
+
+            match rl.readline(prompt) {
                 Ok(line) => {
+                    let mut state = rusty_ctrl_c_state_clone.lock().unwrap();
+                    if state.showing_message {
+                        // Clear the message and reset state
+                        print!("\r\x1b[2K\x1b[1A\x1b[2K"); // Clear message line and move up
+                        io::stdout().flush().unwrap();
+                        state.showing_message = false;
+                        state.last_time = None;
+                    }
+
                     rl.add_history_entry(line.as_str()).unwrap();
                     if input_tx_clone.send(InputEvent::Command(line)).is_err() {
                         break; // Main task has stopped
                     }
                 }
                 Err(ReadlineError::Interrupted) => {
+                    // Update state immediately in the rustyline thread
+                    {
+                        let mut state = rusty_ctrl_c_state_clone.lock().unwrap();
+                        let now = Instant::now();
+
+                        if !state.command_in_progress {
+                            // Handle double Ctrl+C for exit
+                            let within_timeout = state.last_time
+                                .map(|last| now.duration_since(last) < ctrl_c_timeout)
+                                .unwrap_or(false);
+
+                            if within_timeout {
+                                std::process::exit(0);
+                            } else {
+                                // First Ctrl+C - immediately update state to hide prompt
+                                state.last_time = Some(now);
+                                state.showing_message = true;
+
+                                // Clear the current line and show message
+                                print!("\r\x1b[2K\x1b[1A");
+                                io::stdout().flush().unwrap();
+                                println!("Press Ctrl+C again within 2 seconds to force exit...");
+                            }
+                        }
+                    }
+
                     if input_tx_clone.send(InputEvent::CtrlC).is_err() {
-                        break; // Main task has stopped
+                        break;
                     }
                 }
                 Err(ReadlineError::Eof) => {
@@ -215,7 +240,7 @@ async fn main() {
                 if let Some(last_time) = state.last_time {
                     if Instant::now().duration_since(last_time) >= ctrl_c_timeout {
                         // Clear the message
-                        print!("\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[2A");
+                        print!("\x1b[1A\x1b[2K\x1b[1B\x1b[2K\x1b[1A\r\x1b[32mprompt-cli>\x1b[97m ");
                         io::stdout().flush().unwrap();
                         state.showing_message = false;
                         state.last_time = None;
@@ -270,12 +295,12 @@ async fn main() {
                                 // Spawn command execution in separate task so main loop stays responsive
                                 let ctrl_c_state_clone = ctrl_c_state.clone();
                                 let mut command_handle = tokio::spawn(async move {
-                                    execute_command(cli.command, ctrl_c_state_clone).await
+                                    execute_command(cli.command, &ctrl_c_state_clone).await
                                 });
 
                                 // Wait for either command completion or keep processing other events
                                 let mut command_finished = false;
-                                while !command_finished {
+                                while !command_finished { // todo the problem is probably in here
                                     tokio::select! {
                                         // Command completed
                                         result = &mut command_handle => {
@@ -286,6 +311,7 @@ async fn main() {
                                                 let mut state = ctrl_c_state.lock().unwrap();
                                                 state.command_in_progress = false;
                                                 state.interrupt_command = false;
+                                                drop(state);
                                             }
 
                                             match result {
@@ -320,10 +346,6 @@ async fn main() {
                                                     let mut state = ctrl_c_state.lock().unwrap();
 
                                                     if state.command_in_progress {
-                                                        //print!("\r\x1b[2K");
-                                                       // print!("\r\x1b[2K\x1b[2A\x1b[2K");
-                                                        //io::stdout().flush().unwrap();
-                                                        //println!("^C");
                                                         print!("Interrupting command...");
                                                         state.interrupt_command = true;
                                                         // Continue loop to wait for command to actually stop
@@ -341,7 +363,9 @@ async fn main() {
                                                         println!("Press Ctrl+C again within 2 seconds to force exit...");
                                                         state.last_time = Some(now);
                                                         state.showing_message = true;
+                                                        println!("Debug: CtrlCState after Ctrl+C: {:?}", *state);
                                                     }
+                                                    drop(state);
                                                 }
                                                 Some(InputEvent::Command(line)) => {
                                                     // User tried to run another command while one is running
@@ -376,28 +400,9 @@ async fn main() {
                     }
 
                     Some(InputEvent::CtrlC) => {
-                        let now = Instant::now();
-                        let mut state = ctrl_c_state.lock().unwrap();
-
-                        // This only handles Ctrl+C when NO command is running
-                        if !state.command_in_progress {
-                            // Handle double Ctrl+C for exit
-                            let within_timeout = state.last_time
-                                .map(|last| now.duration_since(last) < ctrl_c_timeout)
-                                .unwrap_or(false);
-
-                            if within_timeout {
-                                println!("Force exiting...");
-                                break;
-                            }
-
-                            println!("Press Ctrl+C again within 2 seconds to force exit...");
-                            state.last_time = Some(now);
-                            state.showing_message = true;
-                        }
-                        // If command is running, Ctrl+C is handled in the command execution loop above
+                        // this is handled in the readline loop
+                        continue;
                     }
-
                     Some(InputEvent::Exit) => {
                         println!("Goodbye!");
                         break;
@@ -415,9 +420,10 @@ async fn main() {
 
 async fn execute_command(
     command: Commands,
-    ctrl_c_state: Arc<Mutex<CtrlCState>>
+    ctrl_c_state: &Arc<Mutex<CtrlCState>>
 ) -> anyhow::Result<bool> {  // Changed from Result<bool> to anyhow::Result<bool>
     let config = CoreConfig::get();
+
     match command {
         Commands::InitDb => {
             println!("Initializing database...");
@@ -461,13 +467,14 @@ async fn execute_command(
                         if state.interrupt_command {
                             return Err(anyhow::anyhow!("Command interrupted"));
                         }
+                        drop(state);
                     }
                 }
             }
         }
         Commands::Prompt { prompt, model, provider } => {
             let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), &ctrl_c_state) {
+            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), ctrl_c_state) {
                 Ok(response) => {
                     println!("✅ Response:");
                     if let Some(ref resp) = response.response {
@@ -543,6 +550,8 @@ async fn execute_command(
             }
         }
     }
+    print!("\x1b[32mprompt-cli>\x1b[97m ");
+    io::stdout().flush().unwrap();
     Ok(true) // Continue the loop
 }
 
