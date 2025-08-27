@@ -1,7 +1,7 @@
-use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
+use std::str::FromStr;
 use strum::{Display, EnumIter, IntoEnumIterator};
 
 // maps the json containing the prompt into this struct
@@ -9,7 +9,7 @@ use strum::{Display, EnumIter, IntoEnumIterator};
 pub struct CreatePromptRequest {
     pub prompt: String,
     pub provider: String,
-    pub model: Option<String>
+    pub model: Option<String>,
 }
 
 // Serialize: used to convert this struct into JSON for responses
@@ -37,8 +37,8 @@ pub struct GetModelsQuery {
 pub enum Provider {
     #[strum(to_string = "Anthropic")]
     Anthropic,
- //  #[strum(to_string = "OpenAI")]
- //   OpenAI,
+    //  #[strum(to_string = "OpenAI")]
+    //   OpenAI,
 }
 
 impl FromStr for Provider {
@@ -59,8 +59,6 @@ impl Provider {
     }
 
     pub fn all_names() -> Vec<String> {
-        Provider::iter()
-            .map(|p| p.to_string())
-            .collect()
+        Provider::iter().map(|p| p.to_string()).collect()
     }
 }
