@@ -153,13 +153,11 @@ async fn main() {
         loop {
             let prompt : &str;
             let state = rusty_ctrl_c_state_clone.lock().unwrap();
-            //println!("Debug: CtrlCState in readline loop: {:?}", *state);
             // when I ctrl+c it prompts again before the state is set
             if !state.interrupt_command && !state.command_in_progress && !state.showing_message {
                 print!("\x1b[?25h"); // Show cursor
                 io::stdout().flush().unwrap();
                 prompt = "\x1b[32mprompt-cli>\x1b[97m ";
-                //prompt = "";
             } else {
                 print!("\x1b[?25l"); // Hide cursor
                 io::stdout().flush().unwrap();
@@ -271,13 +269,11 @@ async fn main() {
                             if state.showing_message {
                                 // Clear any existing message
                                 print!("\x1b[2K\x1b[1A\x1b[2K\r\x1b[32mprompt-cli>\x1b[97m ");
-                                //print!("\x1b[2K\x1b[1A\x1b[2K\r");
                                 io::stdout().flush().unwrap();
                                 state.showing_message = false;
                                 continue;
                             }
                         }
-
 
                         // Parse and execute command
                         let args = parse_quoted_args(&line);
@@ -337,26 +333,9 @@ async fn main() {
                                                     let mut state = ctrl_c_state.lock().unwrap();
 
                                                     if state.command_in_progress {
-                                                        //print!("\rInterrupting command...");
                                                         state.interrupt_command = true;
                                                         // Continue loop to wait for command to actually stop
-                                                    } /*else {
-                                                        // Handle double Ctrl+C logic
-                                                        let within_timeout = state.last_time
-                                                            .map(|last| now.duration_since(last) < ctrl_c_timeout)
-                                                            .unwrap_or(false);
-
-                                                        if within_timeout {
-                                                            println!("Force exiting...");
-                                                            drop(state);
-                                                            return; // Exit main loop
-                                                        }
-
-                                                        println!("Press Ctrl+C again within 2 seconds to force exit...");
-                                                        state.last_time = Some(now);
-                                                        state.showing_message = true;
-                                                        println!("Debug: CtrlCState after Ctrl+C: {:?}", *state);
-                                                    }*/
+                                                    }
                                                     drop(state);
                                                 }
                                                 Some(InputEvent::Command(line)) => {
@@ -427,8 +406,6 @@ async fn command_in_progress_display(
 
         let state = ctrl_c_state.lock().unwrap();
         if state.interrupt_command || !state.command_in_progress {
-            //print!("\r\x1b[2K");
-            //io::stdout().flush().unwrap();
             drop(state);
             break;
         }
@@ -443,25 +420,16 @@ async fn command_in_progress_display(
 async fn execute_command(
     command: Commands,
     ctrl_c_state: &Arc<Mutex<CtrlCState>>
-) -> anyhow::Result<bool> {  // Changed from Result<bool> to anyhow::Result<bool>
+) -> anyhow::Result<bool> {
     let config = CoreConfig::get();
 
 
-/*    // Mark command as starting
+    // Mark command as starting
     {
         let mut state = ctrl_c_state.lock().unwrap();
-        if state.showing_message {
-            // Clear any existing message
-            print!("\x1b[2K\x1b[1A\x1b[2K\r\x1b[32mprompt-cli>\x1b[97m ");
-            //print!("\x1b[2K\x1b[1A\x1b[2K\r");
-            io::stdout().flush().unwrap();
-            state.showing_message = false;
-            return Ok(true);
-        }
-
         state.command_in_progress = true;
         state.interrupt_command = false;
-    }*/
+    }
 
     print!("\x1b[2K\r\x1b[?25l"); // Clear current line and move up
     io::stdout().flush().unwrap();
@@ -597,15 +565,15 @@ async fn execute_command(
         }
     }
     progress_task.abort();
-
-    let mut state = ctrl_c_state.lock().unwrap();
-    state.command_in_progress = false;
-    state.interrupt_command = false;
-    drop(state);
-    print!("\x1b[32mprompt-cli>\x1b[97m\x1b[?25h "); // Show prompt and cursor
+    print!("\r\x1b[32mprompt-cli>\x1b[97m\x1b[?25h "); // Show prompt and cursor
     io::stdout().flush().unwrap();
-    println!("Setting prompt after command");
 
+    {
+        let mut state = ctrl_c_state.lock().unwrap();
+        state.command_in_progress = false;
+        state.interrupt_command = false;
+        drop(state);
+    }
 
     Ok(true) // Continue the loop
 }
