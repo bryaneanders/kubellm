@@ -255,7 +255,6 @@ async fn main() {
                     state.interrupt_command = true;
                 }
 
-
                 if in_progress {
                     println!("^C");
                     println!("Interrupting command...");
@@ -296,7 +295,6 @@ async fn main() {
                     state.showing_message = true;
                     state.last_time = Some(now);
                 }
-
 
                 // Continue to next iteration which will call readline normally
                 continue;
