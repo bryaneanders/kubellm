@@ -1,17 +1,11 @@
 mod config;
 
-use axum::{
-    response::{Html},
-    routing::{get},
-    Router,
-};
-use core::{
-    CoreConfig, create_database_pool, init_database
-};
+use crate::config::WebConfig;
+use anyhow::{Context, Result};
+use axum::{response::Html, routing::get, Router};
+use core::{create_database_pool, init_database, CoreConfig};
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, services::ServeDir};
-use anyhow::{Context, Result};
-use crate::config::WebConfig;
 
 // serve the contents of the html file
 // the file is read at compile time and embedded in the binary (this gives speed but could explode a binary's size and memory size with many files)
@@ -35,7 +29,10 @@ async fn main() -> Result<()> {
     let web_config = WebConfig::get();
 
     println!("🔧 Configuration loaded");
-    println!("   Server: {}:{}", &web_config.app_server_host, &web_config.app_server_port);
+    println!(
+        "   Server: {}:{}",
+        &web_config.app_server_host, &web_config.app_server_port
+    );
     println!("   Max DB connections: {}", &core_config.max_connections);
 
     let pool = create_database_pool(&core_config).await?;
@@ -54,7 +51,10 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive()) // this is a bad idea for prod
         .with_state(db_connection); // store the Arc<MySqlPool> in the state (DatabaseConnection)
 
-    let bind_address = format!("{}:{}", &web_config.app_server_host, &web_config .app_server_port);
+    let bind_address = format!(
+        "{}:{}",
+        &web_config.app_server_host, &web_config.app_server_port
+    );
     let listener = tokio::net::TcpListener::bind(&bind_address)
         .await
         .context(format!("Failed to bind to {}", bind_address))?;
@@ -64,9 +64,7 @@ async fn main() -> Result<()> {
     println!("📂 View all prompts at /prompts");
     println!("❤️  GET /health for health check");
 
-    axum::serve(listener, app)
-        .await
-        .context("Server error")?;
+    axum::serve(listener, app).await.context("Server error")?;
 
     Ok(())
 }

@@ -5,8 +5,8 @@ use clap::{Parser, Subcommand};
 // import necessary modules from the core library
 use crate::config::CliConfig;
 use core::{
-    create_database_pool, get_all_prompts, init_database,
-    get_models, prompt_model, CoreConfig, Provider
+    create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
+    Provider,
 };
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -151,7 +151,7 @@ async fn main() {
         load_history(&mut rl);
 
         loop {
-            let prompt : &str;
+            let prompt: &str;
             let state = rusty_ctrl_c_state_clone.lock().unwrap();
             // when I ctrl+c it prompts again before the state is set
             if !state.interrupt_command && !state.command_in_progress && !state.showing_message {
@@ -190,7 +190,8 @@ async fn main() {
 
                         if !state.command_in_progress {
                             // Handle double Ctrl+C for exit
-                            let within_timeout = state.last_time
+                            let within_timeout = state
+                                .last_time
                                 .map(|last| now.duration_since(last) < ctrl_c_timeout)
                                 .unwrap_or(false);
 
@@ -391,12 +392,8 @@ async fn main() {
     }
 }
 
-
 // show a spinner when a command is running
-async fn command_in_progress_display(
-    ctrl_c_state: Arc<Mutex<CtrlCState>>,
-    message: &str
-) {
+async fn command_in_progress_display(ctrl_c_state: Arc<Mutex<CtrlCState>>, message: &str) {
     let spinner_chars = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
     let mut spinner_index = 0;
     let mut interval = tokio::time::interval(Duration::from_millis(70));
@@ -411,7 +408,11 @@ async fn command_in_progress_display(
         }
         drop(state);
 
-        print!("\r\x1b[2K{} {}", spinner_chars[spinner_index % spinner_chars.len()], message);
+        print!(
+            "\r\x1b[2K{} {}",
+            spinner_chars[spinner_index % spinner_chars.len()],
+            message
+        );
         io::stdout().flush().unwrap();
         spinner_index += 1;
     }
@@ -419,10 +420,9 @@ async fn command_in_progress_display(
 
 async fn execute_command(
     command: Commands,
-    ctrl_c_state: &Arc<Mutex<CtrlCState>>
+    ctrl_c_state: &Arc<Mutex<CtrlCState>>,
 ) -> anyhow::Result<bool> {
     let config = CoreConfig::get();
-
 
     // Mark command as starting
     {
@@ -434,46 +434,33 @@ async fn execute_command(
     print!("\x1b[2K\r\x1b[?25l"); // Clear current line and move up
     io::stdout().flush().unwrap();
 
-    let progress_task = tokio::spawn(command_in_progress_display(
-        ctrl_c_state.clone(), ""
-    ));
+    let progress_task = tokio::spawn(command_in_progress_display(ctrl_c_state.clone(), ""));
 
     match command {
         Commands::InitDb => {
             println!("Initializing database...");
 
-            let pool = interruptible!(
-                create_database_pool(&config),
-                &ctrl_c_state
-            )?;
+            let pool = interruptible!(create_database_pool(&config), &ctrl_c_state)?;
 
-            interruptible!(
-                init_database(&pool),
-                &ctrl_c_state
-            )?;
+            interruptible!(init_database(&pool), &ctrl_c_state)?;
 
             println!("✅ Database initialized successfully");
         }
         Commands::List => {
-            let pool = interruptible!(
-                create_database_pool(&config),
-                &ctrl_c_state
-            )?;
+            let pool = interruptible!(create_database_pool(&config), &ctrl_c_state)?;
 
-            let prompts = interruptible!(
-                get_all_prompts(&pool),
-                &ctrl_c_state
-            )?;
+            let prompts = interruptible!(get_all_prompts(&pool), &ctrl_c_state)?;
 
             if prompts.is_empty() {
                 println!("No prompts found");
             } else {
                 println!("Found {} prompts:", prompts.len());
                 for prompt in prompts {
-                    println!("  [{}] {}: {}",
-                             prompt.id,
-                             prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
-                             prompt.prompt
+                    println!(
+                        "  [{}] {}: {}",
+                        prompt.id,
+                        prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
+                        prompt.prompt
                     );
                     // Quick check for interruption during output
                     {
@@ -486,9 +473,16 @@ async fn execute_command(
                 }
             }
         }
-        Commands::Prompt { prompt, model, provider } => {
+        Commands::Prompt {
+            prompt,
+            model,
+            provider,
+        } => {
             let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), ctrl_c_state) {
+            match interruptible!(
+                prompt_model(&prompt, &provider, model.as_deref(), &pool),
+                ctrl_c_state
+            ) {
                 Ok(response) => {
                     println!("✅ Response:");
                     if let Some(ref resp) = response.response {
@@ -520,7 +514,7 @@ async fn execute_command(
                     eprintln!("❌ Error fetching models: {}", e);
                 }
             }
-        },
+        }
         Commands::GetProviders => {
             let providers = Provider::all();
             println!("Available providers:");
@@ -530,10 +524,7 @@ async fn execute_command(
         }
         Commands::Status => {
             println!("Checking database connection...");
-            let _pool = interruptible!(
-                create_database_pool(&config),
-                &ctrl_c_state
-            )?;
+            let _pool = interruptible!(create_database_pool(&config), &ctrl_c_state)?;
             println!("✅ Database connection successful");
             println!("Database URL: {}", &config.database_url);
         }
@@ -633,7 +624,9 @@ fn show_help() {
     println!("  init-db                                         Initialize the database");
     println!("  list                                            List all prompts");
     println!("  get-providers                                   Get available model providers");
-    println!("  get-models -r <provider>                        Get available models for a provider");
+    println!(
+        "  get-models -r <provider>                        Get available models for a provider"
+    );
     println!("  prompt -p <prompt> -r <provider> [-m <model>]   Create a new prompt");
     println!("  status                                          Show database connection status");
     println!("  help                                            Show this help message");
