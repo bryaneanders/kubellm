@@ -54,9 +54,6 @@ enum Commands {
     GetProviders,
     /// Show database connection status
     Status,
-    /// Show usage information
-    TestInterrupt,
-    Usage,
     /// Exit the application
     Exit,
 }
@@ -153,15 +150,17 @@ async fn main() {
         loop {
             let state = rusty_ctrl_c_state_clone.lock().unwrap();
             // when I ctrl+c it prompts again before the state is set
-            let prompt: &str = if !state.interrupt_command && !state.command_in_progress && !state.showing_message {
-                print!("\x1b[?25h"); // Show cursor
-                io::stdout().flush().unwrap();
-                "\x1b[32mprompt-cli>\x1b[97m "
-            } else {
-                print!("\x1b[?25l"); // Hide cursor
-                io::stdout().flush().unwrap();
-                ""
-            };
+            let prompt: &str =
+                if !state.interrupt_command && !state.command_in_progress && !state.showing_message
+                {
+                    print!("\x1b[?25h"); // Show cursor
+                    io::stdout().flush().unwrap();
+                    "\x1b[32mprompt-cli>\x1b[97m "
+                } else {
+                    print!("\x1b[?25l"); // Hide cursor
+                    io::stdout().flush().unwrap();
+                    ""
+                };
             drop(state);
 
             match rl.readline(prompt) {
@@ -402,12 +401,14 @@ async fn command_in_progress_display(ctrl_c_state: Arc<Mutex<CtrlCState>>, messa
             break;
         }
 
+        // don't show spinner for short running commands
         print!(
             "\r\x1b[2K{} {}",
             spinner_chars[spinner_index % spinner_chars.len()],
             message
         );
         io::stdout().flush().unwrap();
+
         spinner_index += 1;
     }
 }
@@ -418,7 +419,6 @@ async fn execute_command(
 ) -> anyhow::Result<bool> {
     let config = CoreConfig::get();
 
-    // Mark command as starting
     {
         let mut state = ctrl_c_state.lock().unwrap();
         state.command_in_progress = true;
@@ -432,13 +432,13 @@ async fn execute_command(
 
     match command {
         Commands::InitDb => {
-            println!("Initializing database...");
+            println!("\r\x1b[2KInitializing database...");
 
             let pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
 
             interruptible!(init_database(&pool), &ctrl_c_state)?;
 
-            println!("✅ Database initialized successfully");
+            println!("\r\x1b[2K✅ Database initialized successfully");
         }
         Commands::List => {
             let pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
@@ -446,9 +446,9 @@ async fn execute_command(
             let prompts = interruptible!(get_all_prompts(&pool), &ctrl_c_state)?;
 
             if prompts.is_empty() {
-                println!("No prompts found");
+                println!("\r\x1b[2KNo prompts found");
             } else {
-                println!("Found {} prompts:", prompts.len());
+                println!("\r\x1b[2KFound {} prompts:", prompts.len());
                 for prompt in prompts {
                     println!(
                         "  [{}] {}: {}",
@@ -456,13 +456,6 @@ async fn execute_command(
                         prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
                         prompt.prompt
                     );
-                    // Quick check for interruption during output
-                    {
-                        let state = ctrl_c_state.lock().unwrap();
-                        if state.interrupt_command {
-                            return Err(anyhow::anyhow!("Command interrupted"));
-                        }
-                    }
                 }
             }
         }
@@ -477,16 +470,16 @@ async fn execute_command(
                 ctrl_c_state
             ) {
                 Ok(response) => {
-                    println!("✅ Response:");
+                    println!("\r\x1b[2K✅ Response:");
                     if let Some(ref resp) = response.response {
                         println!("{}", resp);
                     } else {
-                        println!("No response received");
+                        println!("\r\x1b[2K❌ No response received");
                     }
                     println!("Prompt ID: {}", response.id);
                 }
                 Err(e) => {
-                    eprintln!("❌ Error calling model: {}", e);
+                    eprintln!("\r\x1b[2K❌ Error calling model: {}", e);
                     return Ok(true);
                 }
             }
@@ -495,57 +488,35 @@ async fn execute_command(
             match interruptible!(get_models(&provider), ctrl_c_state) {
                 Ok(models) => {
                     if models.is_empty() {
-                        println!("No models found for provider '{}'", provider);
+                        println!("\r\x1b[2KNo models found for provider '{}'", provider);
                     } else {
-                        println!("Available models for provider '{}':", provider);
+                        println!("\r\x1b[2KAvailable models for provider '{}':", provider);
                         for model in models {
                             println!(" - {}", model);
                         }
                     }
                 }
                 Err(e) => {
-                    eprintln!("❌ Error fetching models: {}", e);
+                    eprintln!("\r\x1b[2K❌ Error fetching models: {}", e);
                 }
             }
         }
         Commands::GetProviders => {
             let providers = Provider::all();
-            println!("Available providers:");
+            println!("\r\x1b[2KAvailable providers:");
             for provider in providers {
-                println!("- {}", provider);
+                println!(" - {}", provider);
             }
         }
         Commands::Status => {
-            println!("Checking database connection...");
+            println!("\r\x1b[2KChecking database connection...");
             let _pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
-            println!("✅ Database connection successful");
+            println!("\r\x1b[2K✅ Database connection successful");
             println!("Database URL: {}", config.database_url);
         }
-        Commands::Usage => {
-            show_help();
-        }
         Commands::Exit => {
-            println!("Goodbye!");
+            println!("\r\x1b[2KGoodbye!");
             return Ok(false); // Signal to exit the loop
-        }
-        Commands::TestInterrupt => {
-            println!("Starting 10-second test... (press Ctrl+C to interrupt)");
-
-            let test_result = interruptible!(
-                async {
-                    for i in 0..10 {
-                        println!("Test step {}...", i + 1);
-                        tokio::time::sleep(Duration::from_secs(1)).await;
-                    }
-                    Ok::<(), anyhow::Error>(())
-                },
-                &ctrl_c_state
-            );
-
-            match test_result {
-                Ok(_) => println!("✅ Test completed successfully"),
-                Err(e) => println!("❌ Test interrupted: {}", e),
-            }
         }
     }
     progress_task.abort();
@@ -612,7 +583,7 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
 }
 
 fn show_help() {
-    println!("Available commands:");
+    println!("\r\x1b[2KAvailable commands:");
     println!("  init-db                                         Initialize the database");
     println!("  list                                            List all prompts");
     println!("  get-providers                                   Get available model providers");
@@ -628,4 +599,6 @@ fn show_help() {
     println!("  prompt -p \"What is 2 + 2?\" -r anthropic");
     println!("  prompt -p \"What is 2 + 2?\" -r anthropic -m claude-sonnet-4-20250514");
     println!("  get-models -r anthropic");
+    print!("\r\x1b[32mprompt-cli>\x1b[97m\x1b[?25h "); // Show prompt and cursor
+    io::stdout().flush().unwrap();
 }

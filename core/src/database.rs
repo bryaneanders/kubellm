@@ -21,7 +21,7 @@ pub async fn create_database_pool(config: &CoreConfig) -> Result<MySqlPool> {
         .await
         .context("Database health check failed")?;
 
-    println!("✅ Successfully connected to MySQL database");
+    //println!("✅ Successfully connected to MySQL database");
     Ok(pool)
 }
 
