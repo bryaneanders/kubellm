@@ -151,18 +151,17 @@ async fn main() {
         load_history(&mut rl);
 
         loop {
-            let prompt: &str;
             let state = rusty_ctrl_c_state_clone.lock().unwrap();
             // when I ctrl+c it prompts again before the state is set
-            if !state.interrupt_command && !state.command_in_progress && !state.showing_message {
+            let prompt: &str = if !state.interrupt_command && !state.command_in_progress && !state.showing_message {
                 print!("\x1b[?25h"); // Show cursor
                 io::stdout().flush().unwrap();
-                prompt = "\x1b[32mprompt-cli>\x1b[97m ";
+                "\x1b[32mprompt-cli>\x1b[97m "
             } else {
                 print!("\x1b[?25l"); // Hide cursor
                 io::stdout().flush().unwrap();
-                prompt = "";
-            }
+                ""
+            };
             drop(state);
 
             match rl.readline(prompt) {
@@ -247,7 +246,6 @@ async fn main() {
                     }
                 }
             }
-            drop(state);
         }
     });
 
@@ -330,16 +328,14 @@ async fn main() {
 
                                             match input_event {
                                                 Some(InputEvent::CtrlC) => {
-                                                    let now = Instant::now();
-                                                    let mut state = ctrl_c_state.lock().unwrap();
 
+                                                    let mut state = ctrl_c_state.lock().unwrap();
                                                     if state.command_in_progress {
                                                         state.interrupt_command = true;
                                                         // Continue loop to wait for command to actually stop
                                                     }
-                                                    drop(state);
                                                 }
-                                                Some(InputEvent::Command(line)) => {
+                                                Some(InputEvent::Command(_line)) => {
                                                     // User tried to run another command while one is running
                                                     print!("\r\x1b[2K\x1b[1A"); // Clear current line and move up
                                                     io::stdout().flush().unwrap();
@@ -403,10 +399,8 @@ async fn command_in_progress_display(ctrl_c_state: Arc<Mutex<CtrlCState>>, messa
 
         let state = ctrl_c_state.lock().unwrap();
         if state.interrupt_command || !state.command_in_progress {
-            drop(state);
             break;
         }
-        drop(state);
 
         print!(
             "\r\x1b[2K{} {}",
@@ -440,14 +434,14 @@ async fn execute_command(
         Commands::InitDb => {
             println!("Initializing database...");
 
-            let pool = interruptible!(create_database_pool(&config), &ctrl_c_state)?;
+            let pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
 
             interruptible!(init_database(&pool), &ctrl_c_state)?;
 
             println!("✅ Database initialized successfully");
         }
         Commands::List => {
-            let pool = interruptible!(create_database_pool(&config), &ctrl_c_state)?;
+            let pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
 
             let prompts = interruptible!(get_all_prompts(&pool), &ctrl_c_state)?;
 
@@ -468,7 +462,6 @@ async fn execute_command(
                         if state.interrupt_command {
                             return Err(anyhow::anyhow!("Command interrupted"));
                         }
-                        drop(state);
                     }
                 }
             }
@@ -478,7 +471,7 @@ async fn execute_command(
             model,
             provider,
         } => {
-            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
             match interruptible!(
                 prompt_model(&prompt, &provider, model.as_deref(), &pool),
                 ctrl_c_state
@@ -524,9 +517,9 @@ async fn execute_command(
         }
         Commands::Status => {
             println!("Checking database connection...");
-            let _pool = interruptible!(create_database_pool(&config), &ctrl_c_state)?;
+            let _pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
             println!("✅ Database connection successful");
-            println!("Database URL: {}", &config.database_url);
+            println!("Database URL: {}", config.database_url);
         }
         Commands::Usage => {
             show_help();
@@ -563,7 +556,6 @@ async fn execute_command(
         let mut state = ctrl_c_state.lock().unwrap();
         state.command_in_progress = false;
         state.interrupt_command = false;
-        drop(state);
     }
 
     Ok(true) // Continue the loop

@@ -33,9 +33,9 @@ async fn main() -> Result<()> {
         "   Server: {}:{}",
         &web_config.app_server_host, &web_config.app_server_port
     );
-    println!("   Max DB connections: {}", &core_config.max_connections);
+    println!("   Max DB connections: {}", core_config.max_connections);
 
-    let pool = create_database_pool(&core_config).await?;
+    let pool = create_database_pool(core_config).await?;
 
     init_database(&pool)
         .await

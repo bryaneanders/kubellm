@@ -53,8 +53,8 @@ pub async fn create_prompt_record(
         "INSERT INTO prompts (prompt, response, model, created_at) VALUES (?, ?, ?, ?)",
     )
     .bind(&prompt)
-    .bind(&response)
-    .bind(&model)
+    .bind(response)
+    .bind(model)
     .bind(Utc::now().naive_utc())
     .execute(pool)
     .await?;

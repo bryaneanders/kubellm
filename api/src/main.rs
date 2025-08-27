@@ -26,10 +26,10 @@ async fn main() -> Result<()> {
         "   Server: {}:{}",
         &api_config.api_server_host, &api_config.api_server_port
     );
-    println!("   Max DB connections: {}", &core_config.max_connections);
+    println!("   Max DB connections: {}", core_config.max_connections);
 
     // create mysql pool using properties in config
-    let pool = create_database_pool(&core_config).await?;
+    let pool = create_database_pool(core_config).await?;
 
     // wait for the pool to initialize
     init_database(&pool)
