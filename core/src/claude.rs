@@ -1,8 +1,8 @@
-use serde::{Deserialize, Serialize};
+use crate::create_prompt_record;
 use crate::{CoreConfig, Prompt};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
-use crate::create_prompt_record;
 
 #[derive(Debug, Deserialize)]
 pub struct ClaudeResponse {
@@ -56,7 +56,10 @@ struct AnthropicModelsResponse {
     last_id: Option<String>,
 }
 
-pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,
+pub async fn call_claude(
+    prompt: &str,
+    model: Option<&str>,
+    pool: &MySqlPool,
 ) -> Result<Prompt, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
     let client = Client::new();
@@ -101,15 +104,17 @@ pub async fn call_claude(prompt: &str, model: Option<&str>, pool: &MySqlPool,
             .map(|block| block.text.clone())
             .unwrap_or_else(|| "No response content".to_string());
 
-        Ok(create_prompt_record(pool, prompt.to_string(), Some(&response_text), Some(model)).await?)
+        Ok(
+            create_prompt_record(pool, prompt.to_string(), Some(&response_text), Some(model))
+                .await?,
+        )
     } else {
         let error_text = response.text().await?;
         Err(format!("API request failed: {}", error_text).into())
     }
 }
 
-pub async fn get_claude_models(
-) -> Result<Vec<AnthropicModel>, Box<dyn std::error::Error>> {
+pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
     let client = Client::new();
 

@@ -5,7 +5,7 @@ use crate::models::Prompt;
 // load error handling and result types
 use anyhow::{Context, Result};
 // date and time handling
-use chrono::{Utc, NaiveDateTime};
+use chrono::{NaiveDateTime, Utc};
 // load mysql pools and database row modules
 use sqlx::{mysql::MySqlPool, Row};
 
@@ -47,26 +47,25 @@ pub async fn create_prompt_record(
     pool: &MySqlPool,
     prompt: String,
     response: Option<&str>, // save the response or null if not provided
-    model: Option<&str>, // save the model or null if not provided
+    model: Option<&str>,    // save the model or null if not provided
 ) -> Result<Prompt, sqlx::Error> {
     let insert_result = sqlx::query(
-        "INSERT INTO prompts (prompt, response, model, created_at) VALUES (?, ?, ?, ?)"
+        "INSERT INTO prompts (prompt, response, model, created_at) VALUES (?, ?, ?, ?)",
     )
-        .bind(&prompt)
-        .bind(&response)
-        .bind(&model)
-        .bind(Utc::now().naive_utc())
-        .execute(pool)
-        .await?;
+    .bind(&prompt)
+    .bind(&response)
+    .bind(&model)
+    .bind(Utc::now().naive_utc())
+    .execute(pool)
+    .await?;
 
     let id = insert_result.last_insert_id() as i64;
 
-    let row = sqlx::query(
-        "SELECT id, prompt, response, model, created_at  FROM prompts WHERE id = ?"
-    )
-        .bind(id)
-        .fetch_one(pool)
-        .await?;
+    let row =
+        sqlx::query("SELECT id, prompt, response, model, created_at  FROM prompts WHERE id = ?")
+            .bind(id)
+            .fetch_one(pool)
+            .await?;
 
     let naive_datetime: NaiveDateTime = row.get("created_at");
 
@@ -79,24 +78,26 @@ pub async fn create_prompt_record(
     })
 }
 
-
 pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Error> {
     let rows = sqlx::query(
-        "SELECT id, prompt, response, model, created_at FROM prompts ORDER BY created_at DESC"
+        "SELECT id, prompt, response, model, created_at FROM prompts ORDER BY created_at DESC",
     )
-        .fetch_all(pool)
-        .await?;
+    .fetch_all(pool)
+    .await?;
 
-    let prompts = rows.into_iter().map(|row| {
-        let naive_datetime: NaiveDateTime = row.get("created_at");
-        Prompt {
-            id: row.get("id"),
-            prompt: row.get("prompt"),
-            response: row.get("response"),
-            model: row.get("model"),
-            created_at: naive_datetime.and_utc(),
-        }
-    }).collect();
+    let prompts = rows
+        .into_iter()
+        .map(|row| {
+            let naive_datetime: NaiveDateTime = row.get("created_at");
+            Prompt {
+                id: row.get("id"),
+                prompt: row.get("prompt"),
+                response: row.get("response"),
+                model: row.get("model"),
+                created_at: naive_datetime.and_utc(),
+            }
+        })
+        .collect();
 
     Ok(prompts)
 }

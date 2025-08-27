@@ -6,8 +6,8 @@ use clap::{Parser, Subcommand};
 // import necessary modules from the core library
 use crate::config::CliConfig;
 use kubellm_core::{
-    create_database_pool, get_all_prompts, init_database,
-    get_models, prompt_model, CoreConfig, Provider
+    create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
+    Provider,
 };
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
@@ -351,9 +351,16 @@ async fn execute_command(
                 }
             }
         }
-        Commands::Prompt { prompt, model, provider } => {
+        Commands::Prompt {
+            prompt,
+            model,
+            provider,
+        } => {
             let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
-            match interruptible!(prompt_model(&prompt, &provider, model.as_deref(), &pool), ctrl_c_state) {
+            match interruptible!(
+                prompt_model(&prompt, &provider, model.as_deref(), &pool),
+                ctrl_c_state
+            ) {
                 Ok(response) => {
                     println!("✅ Response:");
                     if let Some(ref resp) = response.response {
@@ -385,7 +392,7 @@ async fn execute_command(
                     eprintln!("❌ Error fetching models: {}", e);
                 }
             }
-        },
+        }
         Commands::GetProviders => {
             let providers = Provider::all();
             println!("Available providers:");
@@ -465,7 +472,9 @@ fn show_help() {
     println!("  init-db                                         Initialize the database");
     println!("  list                                            List all prompts");
     println!("  get-providers                                   Get available model providers");
-    println!("  get-models -r <provider>                        Get available models for a provider");
+    println!(
+        "  get-models -r <provider>                        Get available models for a provider"
+    );
     println!("  prompt -p <prompt> -r <provider> [-m <model>]   Create a new prompt");
     println!("  status                                          Show database connection status");
     println!("  help                                            Show this help message");

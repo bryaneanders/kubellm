@@ -1,12 +1,12 @@
-use std::sync::Arc;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
 use axum::Json;
 use sqlx::MySqlPool;
+use std::sync::Arc;
 
 use kubellm_core::{
-    CreatePromptRequest, Prompt, ErrorResponse, GetModelsQuery,
-    get_all_prompts, prompt_model, get_models
+    get_all_prompts, get_models, prompt_model, CreatePromptRequest, ErrorResponse, GetModelsQuery,
+    Prompt,
 };
 
 // Map Arc<MySqlPool> as the type DatabaseConnection
@@ -29,10 +29,20 @@ pub async fn create_prompt_handler(
         ));
     }
 
-    match prompt_model(&payload.prompt, &payload.provider, payload.model.as_deref(), &pool).await {
+    match prompt_model(
+        &payload.prompt,
+        &payload.provider,
+        payload.model.as_deref(),
+        &pool,
+    )
+    .await
+    {
         Ok(prompt) => Ok(Json(prompt)), // return prompt as json on success
         Err(e) => {
-            eprintln!("Error prompting model for provider {}: {}", &payload.provider, e);
+            eprintln!(
+                "Error prompting model for provider {}: {}",
+                &payload.provider, e
+            );
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {
@@ -51,7 +61,10 @@ pub async fn get_models_handler(
     match get_models(&params.provider).await {
         Ok(models) => Ok(Json(models)),
         Err(e) => {
-            eprintln!("Error retrieving models for provider {}: {}", &params.provider, e);
+            eprintln!(
+                "Error retrieving models for provider {}: {}",
+                &params.provider, e
+            );
             Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 Json(ErrorResponse {

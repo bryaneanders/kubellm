@@ -1,17 +1,15 @@
 mod prompt;
 
+use crate::prompt::{create_prompt_handler, get_prompts_handler};
+use anyhow::{Context, Result};
 use axum::{
     routing::{get, post},
     Router,
 };
-use kubellm_core::{
-    create_database_pool, init_database,
-};
+use kubellm_core::{create_database_pool, init_database};
+use prompts_api::{get_models_handler, ApiConfig};
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
-use anyhow::{Context, Result};
-use prompts_api::{get_models_handler, ApiConfig};
-use crate::prompt::{create_prompt_handler, get_prompts_handler,};
 
 async fn health_check() -> &'static str {
     "API is running!"
@@ -24,7 +22,10 @@ async fn main() -> Result<()> {
     let api_config = ApiConfig::get();
 
     println!("🔧 Configuration loaded");
-    println!("   Server: {}:{}", &api_config.api_server_host, &api_config.api_server_port);
+    println!(
+        "   Server: {}:{}",
+        &api_config.api_server_host, &api_config.api_server_port
+    );
     println!("   Max DB connections: {}", &core_config.max_connections);
 
     // create mysql pool using properties in config
@@ -47,7 +48,10 @@ async fn main() -> Result<()> {
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 
-    let bind_address = format!("{}:{}", &api_config.api_server_host, &api_config.api_server_port);
+    let bind_address = format!(
+        "{}:{}",
+        &api_config.api_server_host, &api_config.api_server_port
+    );
     let listener = tokio::net::TcpListener::bind(&bind_address)
         .await
         .context(format!("Failed to bind to {}", bind_address))?;
@@ -58,9 +62,7 @@ async fn main() -> Result<()> {
     println!("⚛️ GET /models to view a provider's models");
     println!("❤️ GET /health for health check");
 
-    axum::serve(listener, app)
-        .await
-        .context("Server error")?;
+    axum::serve(listener, app).await.context("Server error")?;
 
     Ok(())
 }

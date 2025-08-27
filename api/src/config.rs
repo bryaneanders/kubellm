@@ -14,8 +14,8 @@ impl ApiConfig {
     pub fn from_env() -> Result<Self> {
         dotenvy::dotenv().ok();
 
-        let api_server_host = env::var("API_SERVER_HOST")
-            .unwrap_or_else(|_| "127.0.0.1".to_string());
+        let api_server_host =
+            env::var("API_SERVER_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
 
         let api_server_port = env::var("SERVER_PORT")
             .unwrap_or_else(|_| "3001".to_string())
