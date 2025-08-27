@@ -1,5 +1,5 @@
 [package]
-name = "core"
+name = "kubellm-core"
 version = "0.1.0"
 edition = "2021"
 
@@ -16,4 +16,4 @@ dotenvy = "0.15"
 anyhow = "1.0"
 # web requests
 reqwest = { version = "0.11", features = ["json"] }
-strum = { version = "0.27" , features = ["derive"] }
+strum = { version = "0.27" , features = ["derive", "strum_macros"] }

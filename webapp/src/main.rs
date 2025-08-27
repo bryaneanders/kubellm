@@ -3,7 +3,7 @@ mod config;
 use crate::config::WebConfig;
 use anyhow::{Context, Result};
 use axum::{response::Html, routing::get, Router};
-use core::{create_database_pool, init_database, CoreConfig};
+use kubellm_core::{create_database_pool, init_database, CoreConfig};
 use std::sync::Arc;
 use tower_http::{cors::CorsLayer, services::ServeDir};
 

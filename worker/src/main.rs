@@ -1,5 +1,5 @@
 use anyhow::Result;
-use core::{Config, create_database_pool};
+use kubellm_core::{CoreConfig, create_database_pool};
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use tokio::time;
@@ -94,7 +94,7 @@ impl Worker {
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = Config::get();
+    let config = CoreConfig::get();
     
     // Verify database connection
     let _pool = create_database_pool(&config).await?;

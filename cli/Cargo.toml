@@ -9,7 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 # import the core library
-core = { path = "../core" }
+kubellm-core = { path = "../core" }
 # command line argument parser
 clap = { version = "4.0", features = ["derive"] }
 # include all of tokio for async operations

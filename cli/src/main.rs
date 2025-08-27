@@ -2,7 +2,7 @@ mod config;
 
 use crate::config::CliConfig;
 use clap::{Parser, Subcommand};
-use core::{
+use kubellm_core::{
     create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
     Provider,
 };

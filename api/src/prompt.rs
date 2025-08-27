@@ -4,7 +4,7 @@ use axum::Json;
 use sqlx::MySqlPool;
 use std::sync::Arc;
 
-use core::{
+use kubellm_core::{
     get_all_prompts, get_models, prompt_model, CreatePromptRequest, ErrorResponse, GetModelsQuery,
     Prompt,
 };
