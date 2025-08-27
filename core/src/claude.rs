@@ -85,7 +85,7 @@ pub async fn call_claude(
     };
 
     let response = client
-        .post(&format!("{}/messages", &config.anthropic_url))
+        .post(format!("{}/messages", &config.anthropic_url))
         .header("x-api-key", &config.anthropic_key.clone().unwrap())
         .header("anthropic-version", "2023-06-01")
         .header("content-type", "application/json")
@@ -123,7 +123,7 @@ pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::err
     }
 
     let response = client
-        .get(&format!("{}/models", &config.anthropic_url))
+        .get(format!("{}/models", &config.anthropic_url))
         .header("x-api-key", &config.anthropic_key.clone().unwrap())
         .header("anthropic-version", "2023-06-01")
         .send()

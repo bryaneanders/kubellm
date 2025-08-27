@@ -248,21 +248,17 @@ async fn main() {
                 }
             }
             Err(ReadlineError::Interrupted) => {
-                let now = Instant::now();
-                let mut state = ctrl_c_state.lock().unwrap();
-
-                /*if state.command_in_progress {
-                    println!("Interrupting command...");
+                let in_progress;
+                {
+                    let mut state = ctrl_c_state.lock().unwrap();
+                    in_progress = state.command_in_progress;
                     state.interrupt_command = true;
-                    drop(state);
-                    continue;
-                }*/
+                }
 
-                if state.command_in_progress {
+
+                if in_progress {
                     println!("^C");
                     println!("Interrupting command...");
-                    state.interrupt_command = true;
-                    drop(state);
 
                     // Stay in a loop until command finishes or we need to force exit
                     loop {
@@ -281,22 +277,26 @@ async fn main() {
                 }
 
                 // Check if this is within the timeout window of the last Ctrl+C
-                let within_timeout = state
-                    .last_time
-                    .map(|last| now.duration_since(last) < ctrl_c_timeout)
-                    .unwrap_or(false);
+                {
+                    let now = Instant::now();
+                    let mut state = ctrl_c_state.lock().unwrap();
+                    let within_timeout = state
+                        .last_time
+                        .map(|last| now.duration_since(last) < ctrl_c_timeout)
+                        .unwrap_or(false);
 
-                if within_timeout {
-                    println!("Force exiting...");
-                    std::process::exit(0);
+                    if within_timeout {
+                        println!("Force exiting...");
+                        std::process::exit(0);
+                    }
+
+                    // Show the warning message below the current prompt
+                    println!("Press Ctrl+C again within 2 seconds to force exit...");
+                    use_blank_prompt = true;
+                    state.showing_message = true;
+                    state.last_time = Some(now);
                 }
 
-                // Show the warning message below the current prompt
-                println!("Press Ctrl+C again within 2 seconds to force exit...");
-                use_blank_prompt = true;
-                state.showing_message = true;
-                state.last_time = Some(now);
-                drop(state);
 
                 // Continue to next iteration which will call readline normally
                 continue;
@@ -329,12 +329,12 @@ async fn execute_command(
     match command {
         Commands::InitDb => {
             println!("Initializing database...");
-            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
             interruptible!(init_database(&pool), ctrl_c_state)?;
             println!("✅ Database initialized successfully");
         }
         Commands::List => {
-            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
             let prompts = interruptible!(get_all_prompts(&pool), ctrl_c_state)?;
 
             if prompts.is_empty() {
@@ -356,7 +356,7 @@ async fn execute_command(
             model,
             provider,
         } => {
-            let pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
             match interruptible!(
                 prompt_model(&prompt, &provider, model.as_deref(), &pool),
                 ctrl_c_state
@@ -402,9 +402,9 @@ async fn execute_command(
         }
         Commands::Status => {
             println!("Checking database connection...");
-            let _pool = interruptible!(create_database_pool(&config), ctrl_c_state)?;
+            let _pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
             println!("✅ Database connection successful");
-            println!("Database URL: {}", &config.database_url);
+            println!("Database URL: {}", config.database_url);
         }
         Commands::Usage => {
             show_help();

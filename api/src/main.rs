@@ -29,7 +29,7 @@ async fn main() -> Result<()> {
     println!("   Max DB connections: {}", &core_config.max_connections);
 
     // create mysql pool using properties in config
-    let pool = create_database_pool(&core_config).await?;
+    let pool = create_database_pool(core_config).await?;
 
     // wait for the pool to initialize
     init_database(&pool)

@@ -35,7 +35,7 @@ async fn main() -> Result<()> {
     );
     println!("   Max DB connections: {}", &core_config.max_connections);
 
-    let pool = create_database_pool(&core_config).await?;
+    let pool = create_database_pool(core_config).await?;
 
     init_database(&pool)
         .await
