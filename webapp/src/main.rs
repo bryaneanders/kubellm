@@ -5,7 +5,7 @@ use axum::{
     routing::{get},
     Router,
 };
-use core::{
+use kubellm_core::{
     CoreConfig, create_database_pool, init_database
 };
 use std::sync::Arc;

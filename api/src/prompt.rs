@@ -4,7 +4,7 @@ use axum::http::StatusCode;
 use axum::Json;
 use sqlx::MySqlPool;
 
-use core::{
+use kubellm_core::{
     CreatePromptRequest, Prompt, ErrorResponse, GetModelsQuery,
     get_all_prompts, prompt_model, get_models
 };

@@ -5,7 +5,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 // import necessary modules from the core library
 use crate::config::CliConfig;
-use core::{
+use kubellm_core::{
     create_database_pool, get_all_prompts, init_database,
     get_models, prompt_model, CoreConfig, Provider
 };

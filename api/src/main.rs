@@ -4,7 +4,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use core::{
+use kubellm_core::{
     create_database_pool, init_database,
 };
 use std::sync::Arc;
@@ -20,7 +20,7 @@ async fn health_check() -> &'static str {
 // Create a multi-threaded Tokio runtime for the api server
 #[tokio::main]
 async fn main() -> Result<()> {
-    let core_config = core::CoreConfig::get();
+    let core_config = kubellm_core::CoreConfig::get();
     let api_config = ApiConfig::get();
 
     println!("🔧 Configuration loaded");

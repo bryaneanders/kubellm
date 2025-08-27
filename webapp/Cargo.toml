@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 # import the core library
-core = { path = "../core" }
+kubellm-core = { path = "../core" }
 # web application framework
 axum = "0.7"
 # async, non-blocking io
