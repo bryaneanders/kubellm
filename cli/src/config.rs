@@ -27,7 +27,7 @@ impl CliConfig {
 
     pub fn get_history_file_path() -> PathBuf {
         dirs::home_dir()
-            .map(|home| home.join(".prompt-cli-history"))
-            .unwrap_or_else(|| PathBuf::from(".prompt-cli-history"))
+            .map(|home| home.join(".prompts-cli-history"))
+            .unwrap_or_else(|| PathBuf::from(".prompts-cli-history"))
     }
 }
