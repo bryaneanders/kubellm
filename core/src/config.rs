@@ -8,6 +8,8 @@ pub struct CoreConfig {
     pub max_connections: u32,
     pub anthropic_url: String,
     pub anthropic_key: Option<String>,
+    pub openai_url: String,
+    pub openai_key: Option<String>,
     pub default_claude_model: String,
 }
 
@@ -30,6 +32,11 @@ impl CoreConfig {
 
         let anthropic_key = env::var("ANTHROPIC_KEY").ok();
 
+        let openai_url = env::var("ANTHROPIC_BASE_URL")
+            .unwrap_or_else(|_| "https://api.anthropic.com/v1".to_string());
+
+        let openai_key = env::var("ANTHROPIC_KEY").ok();
+
         let default_claude_model = env::var("DEFAULT_CLAUDE_MODEL")
             .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
 
@@ -38,6 +45,8 @@ impl CoreConfig {
             max_connections,
             anthropic_url,
             anthropic_key,
+            openai_url,
+            openai_key,
             default_claude_model,
         })
     }

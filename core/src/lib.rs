@@ -4,6 +4,7 @@ pub mod config;
 pub mod database;
 pub mod models;
 pub mod prompt;
+pub mod openai;
 
 // allows use of these structs and functions outside the core library without
 // needing to specify the full path
