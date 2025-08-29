@@ -8,6 +8,7 @@ use kubellm_core::{
 };
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
+use std::fs::File;
 use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -85,6 +86,31 @@ macro_rules! interruptible {
 
 fn load_history(rl: &mut DefaultEditor) {
     let config = CliConfig::get();
+    match config.history_file_path.exists() {
+        true => {}
+        false => {
+            if let Some(parent) = config.history_file_path.parent() {
+                if !parent.exists() {
+                    if let Err(e) = std::fs::create_dir_all(parent) {
+                        eprintln!(
+                            "Warning: Could not create history file directory {:?}: {}",
+                            parent, e
+                        );
+                        return;
+                    }
+                }
+            }
+
+            if let Err(e) = File::create(&config.history_file_path) {
+                eprintln!(
+                    "Warning: Could not create history file {:?}: {}",
+                    config.history_file_path, e
+                );
+                return;
+            }
+        }
+    }
+
     if let Err(e) = rl.load_history(&config.history_file_path) {
         // Only show error if it's not "file not found"
         if config.history_file_path.exists() {
@@ -315,6 +341,7 @@ fn crate_rustyline_background_loop(
                 };
             drop(state);
 
+            save_history(&mut rl);
             match rl.readline(prompt) {
                 Ok(line) => {
                     let mut state = rusty_ctrl_c_state_clone.lock().unwrap();
@@ -373,8 +400,6 @@ fn crate_rustyline_background_loop(
                 }
             }
         }
-
-        save_history(&mut rl);
     });
 }
 
