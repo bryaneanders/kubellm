@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
 
 #[derive(Debug, Deserialize)]
-pub struct ClaudeResponse {
+pub struct AnthropicResponse {
     pub content: Vec<ContentBlock>,
     pub model: String,
     pub role: String,
@@ -27,14 +27,83 @@ pub struct Usage {
 
 // Request structures
 #[derive(Debug, Serialize)]
-pub struct ClaudeRequest {
+pub struct AnthropicRequest {
     pub model: String,
+    pub messages: Vec<AnthropicMessage>,
     pub max_tokens: u32,
-    pub messages: Vec<Message>,
+    pub temperature: f32,
+}
+
+impl AnthropicRequest {
+    pub fn new(model: String, messages: Vec<AnthropicMessage>) -> Self {
+        Self {
+            model,
+            messages,
+            temperature: 0.5, // default to moderate randomness
+            max_tokens: 1024,
+        }
+    }
+
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
+}
+
+pub struct AnthropicRequestBuilder {
+    pub model: String,
+    pub messages: Vec<AnthropicMessage>,
+    pub max_tokens: u32,
+    pub temperature: f32,
+}
+
+impl AnthropicRequestBuilder {
+    pub fn new(model: String) -> Self {
+        Self {
+            model,
+            messages: Vec::new(),
+            temperature: 0.5,
+            max_tokens: 1024,
+        }
+    }
+
+    pub fn messages(mut self, messages: Vec<AnthropicMessage>) -> Self {
+        self.messages = messages;
+        self
+    }
+
+    pub fn add_message(mut self, role: &str, content: &str) -> Self {
+        self.messages.push(AnthropicMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+        });
+        self
+    }
+
+    pub fn temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
+
+    pub fn max_tokens(mut self, tokens: u32) -> Self {
+        self.max_tokens = tokens;
+        self
+    }
+
+    pub fn build(self) -> AnthropicRequest {
+        AnthropicRequest::new(self.model, self.messages)
+            .with_temperature(self.temperature)
+            .with_max_tokens(self.max_tokens)
+    }
 }
 
 #[derive(Debug, Serialize)]
-pub struct Message {
+pub struct AnthropicMessage {
     pub role: String,
     pub content: String,
 }
@@ -56,7 +125,7 @@ struct AnthropicModelsResponse {
     last_id: Option<String>,
 }
 
-pub async fn call_claude(
+pub async fn call_anthropic(
     prompt: &str,
     model: Option<&str>,
     pool: &MySqlPool,
@@ -68,21 +137,21 @@ pub async fn call_claude(
         return Err("ANTHROPIC_KEY is not set".into());
     }
 
-    let mut model = model.unwrap_or(&config.default_claude_model);
-    let models = get_claude_models().await?;
+    let mut model = model.unwrap_or(&config.default_anthropic_model);
+    let models = get_anthropic_models().await?;
     // loop over models and make sure the passed in models is valid otherwise use default
     if !models.iter().any(|m| m.id == model) {
-        model = &config.default_claude_model;
+        println!(
+            "\r\x1b[2kInvalid model, {}, falling back to default model, {}",
+            model, &config.default_anthropic_model
+        );
+        model = &config.default_anthropic_model;
     }
 
-    let request = ClaudeRequest {
-        model: model.to_string(),
-        max_tokens: 1024,
-        messages: vec![Message {
-            role: "user".to_string(),
-            content: prompt.to_string(),
-        }],
-    };
+    let request = AnthropicRequestBuilder::new(model.to_string())
+        .add_message("user", prompt)
+        .max_tokens(1024)
+        .build();
 
     let response = client
         .post(format!("{}/messages", &config.anthropic_url))
@@ -95,10 +164,10 @@ pub async fn call_claude(
 
     if response.status().is_success() {
         // Parse the response
-        let claude_response: ClaudeResponse = response.json().await?;
+        let anthropic_response: AnthropicResponse = response.json().await?;
 
         // Extract the text from the first content block
-        let response_text = claude_response
+        let response_text = anthropic_response
             .content
             .first()
             .map(|block| block.text.clone())
@@ -110,18 +179,18 @@ pub async fn call_claude(
         )
     } else {
         let error_text = response.text().await?;
-        Err(format!("API request failed: {}", error_text).into())
+        Err(format!("Anthropic API request failed: {}", error_text).into())
     }
 }
 
-pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::error::Error>> {
+pub async fn get_anthropic_models() -> Result<Vec<AnthropicModel>, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
-    let client = Client::new();
 
     if config.anthropic_key.is_none() {
         return Err("ANTHROPIC_KEY is not set".into());
     }
 
+    let client = Client::new();
     let response = client
         .get(format!("{}/models", &config.anthropic_url))
         .header("x-api-key", &config.anthropic_key.clone().unwrap())
@@ -136,6 +205,6 @@ pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::err
         Ok(models)
     } else {
         let error_text = response.text().await?;
-        Err(format!("API request failed: {}", error_text).into())
+        Err(format!("Anthropic API request failed: {}", error_text).into())
     }
 }

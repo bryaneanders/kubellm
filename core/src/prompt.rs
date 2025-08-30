@@ -1,5 +1,6 @@
-use crate::claude;
+use crate::anthropic;
 use crate::models::{Prompt, Provider};
+use crate::openai;
 use sqlx::MySqlPool;
 use std::str::FromStr;
 
@@ -12,7 +13,11 @@ pub async fn prompt_model(
 ) -> Result<Prompt, Box<dyn std::error::Error>> {
     match Provider::from_str(provider) {
         Ok(provider) => match provider {
-            Provider::Anthropic => match claude::call_claude(prompt, model, pool).await {
+            Provider::Anthropic => match anthropic::call_anthropic(prompt, model, pool).await {
+                Ok(create_prompt_response) => Ok(create_prompt_response),
+                Err(e) => Err(e),
+            },
+            Provider::OpenAI => match openai::call_openai(prompt, model, pool).await {
                 Ok(create_prompt_response) => Ok(create_prompt_response),
                 Err(e) => Err(e),
             },
@@ -25,7 +30,14 @@ pub async fn prompt_model(
 pub async fn get_models(provider: &str) -> Result<Vec<String>, Box<dyn std::error::Error>> {
     match Provider::from_str(provider) {
         Ok(provider) => match provider {
-            Provider::Anthropic => match claude::get_claude_models().await {
+            Provider::Anthropic => match anthropic::get_anthropic_models().await {
+                Ok(models) => {
+                    let model_names = models.into_iter().map(|m| m.id).collect();
+                    Ok(model_names)
+                }
+                Err(e) => Err(e),
+            },
+            Provider::OpenAI => match openai::get_openai_models().await {
                 Ok(models) => {
                     let model_names = models.into_iter().map(|m| m.id).collect();
                     Ok(model_names)
