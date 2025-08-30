@@ -30,6 +30,7 @@ pub struct Usage {
 pub struct ClaudeRequest {
     pub model: String,
     pub max_tokens: u32,
+    pub temperature: f32,
     pub messages: Vec<Message>,
 }
 
@@ -78,6 +79,7 @@ pub async fn call_claude(
     let request = ClaudeRequest {
         model: model.to_string(),
         max_tokens: 1024,
+        temperature: 0.5,
         messages: vec![Message {
             role: "user".to_string(),
             content: prompt.to_string(),
@@ -110,18 +112,18 @@ pub async fn call_claude(
         )
     } else {
         let error_text = response.text().await?;
-        Err(format!("API request failed: {}", error_text).into())
+        Err(format!("Anthropic API request failed: {}", error_text).into())
     }
 }
 
 pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
-    let client = Client::new();
 
     if config.anthropic_key.is_none() {
         return Err("ANTHROPIC_KEY is not set".into());
     }
 
+    let client = Client::new();
     let response = client
         .get(format!("{}/models", &config.anthropic_url))
         .header("x-api-key", &config.anthropic_key.clone().unwrap())
@@ -136,6 +138,6 @@ pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::err
         Ok(models)
     } else {
         let error_text = response.text().await?;
-        Err(format!("API request failed: {}", error_text).into())
+        Err(format!("Anthropic API request failed: {}", error_text).into())
     }
 }

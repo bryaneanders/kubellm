@@ -1,9 +1,14 @@
-use std::os::fd::OwnedFd;
 use crate::create_prompt_record;
 use crate::{CoreConfig, Prompt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use sqlx::MySqlPool;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OpenAIModelsResponse {
+    pub object: String,
+    pub data: Vec<OpenAIModel>,
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIModel {
@@ -13,13 +18,19 @@ pub struct OpenAIModel {
     pub owned_by: String,
 }
 
-pub struct OpenAIChatCompletionRequest {
-    pub role: String,
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OpenAIChatRequest {
+    pub model: String,
     pub messages: Vec<OpenAIMessage>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub max_completion_tokens: Option<u32>,
+    pub temperature: f32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OpenAIChatCompletionResponse {
+#[derive(Debug, Serialize, Deserialize)]
+pub struct OpenAIChatResponse {
     pub id: String,
     pub object: String,
     pub created: u64,
@@ -30,22 +41,22 @@ pub struct OpenAIChatCompletionResponse {
     pub system_fingerprint: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIChoice {
     pub index: u32,
     pub message: OpenAIMessage,
     pub finish_reason: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIMessage {
     pub role: String,
     pub content: String,
-    pub refusal: Option<String>,
-    pub annotations: Vec<serde_json::Value>,
+    /*pub refusal: Option<String>,
+    pub annotations: Vec<serde_json::Value>,*/
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIUsage {
     pub prompt_tokens: u32,
     pub completion_tokens: u32,
@@ -54,13 +65,13 @@ pub struct OpenAIUsage {
     pub completion_tokens_details: OpenAICompletionTokensDetails,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIPromptTokensDetails {
     pub cached_tokens: u32,
     pub audio_tokens: u32,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAICompletionTokensDetails {
     pub reasoning_tokens: u32,
     pub audio_tokens: u32,
@@ -69,15 +80,9 @@ pub struct OpenAICompletionTokensDetails {
 }
 
 pub async fn call_openai(
-    prompt: &Prompt,
-    model: &str,
+    prompt: &str,
+    model: Option<&str>,
     pool: &MySqlPool,
-    //temperature: f64,
-    //max_tokens: u32,
-    //top_p: f64,
-    //frequency_penalty: f64,
-    //presence_penalty: f64,
-    //stop: Option<Vec<String>>,
 ) -> Result<Prompt, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
     let client = Client::new();
@@ -85,24 +90,92 @@ pub async fn call_openai(
     if config.openai_key.is_none() {
         return Err("ANTHROPIC_KEY is not set".into());
     }
+
+    let mut model = model.unwrap_or(&config.default_openai_model);
+    let models = get_openai_models().await?;
+    if !models.iter().any(|m| m.id == model) {
+        model = &config.default_openai_model;
+    }
+
+    // todo want to make this more robust and less repetitive
+    let request;
+    if model == "gpt-5" {
+        request = OpenAIChatRequest {
+            model: model.to_string(),
+            max_tokens: None,
+            max_completion_tokens: Some(1024),
+            temperature: 1.0,
+            messages: vec![OpenAIMessage {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
+        };
+    } else {
+        request = OpenAIChatRequest {
+            model: model.to_string(),
+            max_tokens: Some(2048),
+            max_completion_tokens: None,
+            temperature: 0.5,
+            messages: vec![OpenAIMessage {
+                role: "user".to_string(),
+                content: prompt.to_string(),
+            }],
+        };
+    }
+
+    let response = client
+        .post(&format!("{}/chat/completions", &config.openai_url))
+        .header(
+            "authorization",
+            format!("Bearer {}", &config.openai_key.as_ref().unwrap()),
+        )
+        .header("content-type", "application/json")
+        .json(&request)
+        .send()
+        .await?;
+
+    if response.status().is_success() {
+        let chat_response: OpenAIChatResponse = response.json().await?;
+        if let Some(choice) = chat_response.choices.first() {
+            let repose_text = choice.message.content.as_str();
+
+            Ok(
+                create_prompt_record(pool, prompt.to_string(), Some(repose_text), Some(model))
+                    .await?,
+            )
+        } else {
+            Err("No choices returned from OpenAI API".into())
+        }
+    } else {
+        let error_text = response.text().await?;
+        Err(format!("OpenAI API request failed: {}", error_text).into())
+    }
 }
 
 pub async fn get_openai_models() -> Result<Vec<OpenAIModel>, Box<dyn std::error::Error>> {
     let config = CoreConfig::get();
 
+    if config.openai_key.is_none() {
+        return Err("OPENAI_KEY is not set".into());
+    }
+
     let client = Client::new();
     let response = client
-        .get(&config.openai_url)
-        .header("Authorization", format!("Bearer {}", &config.openai_key.as_ref().unwrap()))
-        .header("Content-Type", "application/json")
+        .get(format!("{}/models", &config.openai_url))
+        .header(
+            "Authorization",
+            format!("Bearer {}", &config.openai_key.clone().unwrap()),
+        )
         .send()
         .await?;
 
     if response.status().is_success() {
-        let models: Vec<OpenAIModel> = response.json().await?;
+        let models_response: OpenAIModelsResponse = response.json().await?;
+        let models: Vec<OpenAIModel> = models_response.data;
+
         Ok(models)
     } else {
         let error_text = response.text().await?;
-        Err(format!("API request failed: {}", error_text).into())
+        Err(format!("OpenAI API request failed: {}", error_text).into())
     }
 }

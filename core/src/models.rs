@@ -37,8 +37,8 @@ pub struct GetModelsQuery {
 pub enum Provider {
     #[strum(to_string = "Anthropic")]
     Anthropic,
-    //  #[strum(to_string = "OpenAI")]
-    //   OpenAI,
+    #[strum(to_string = "OpenAI")]
+    OpenAI,
 }
 
 impl FromStr for Provider {
@@ -47,7 +47,7 @@ impl FromStr for Provider {
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s.to_lowercase().as_str() {
             "anthropic" => Ok(Provider::Anthropic),
-            //"openai" => Ok(Providers::OpenAI),
+            "openai" => Ok(Provider::OpenAI),
             _ => Err(format!("Unknown provider: {}", s)),
         }
     }

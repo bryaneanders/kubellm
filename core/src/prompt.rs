@@ -1,5 +1,6 @@
 use crate::claude;
 use crate::models::{Prompt, Provider};
+use crate::openai;
 use sqlx::MySqlPool;
 use std::str::FromStr;
 
@@ -13,6 +14,10 @@ pub async fn prompt_model(
     match Provider::from_str(provider) {
         Ok(provider) => match provider {
             Provider::Anthropic => match claude::call_claude(prompt, model, pool).await {
+                Ok(create_prompt_response) => Ok(create_prompt_response),
+                Err(e) => Err(e),
+            },
+            Provider::OpenAI => match openai::call_openai(prompt, model, pool).await {
                 Ok(create_prompt_response) => Ok(create_prompt_response),
                 Err(e) => Err(e),
             },
@@ -32,6 +37,13 @@ pub async fn get_models(provider: &str) -> Result<Vec<String>, Box<dyn std::erro
                 }
                 Err(e) => Err(e),
             },
+            Provider::OpenAI => match openai::get_openai_models().await {
+                Ok(models) => {
+                    let model_names = models.into_iter().map(|m| m.id).collect();
+                    Ok(model_names)
+                }
+                Err(e) => Err(e),
+            }
         },
         Err(e) => Err(Box::from(e)),
     }
