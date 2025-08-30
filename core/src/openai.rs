@@ -18,6 +18,14 @@ pub struct OpenAIModel {
     pub owned_by: String,
 }
 
+pub struct OpenAIChatRequestBuilder {
+    model: String,
+    messages: Vec<OpenAIMessage>,
+    temperature: Option<f32>,
+    max_tokens_value: Option<u32>,
+    //additional_params: Map<String, Value>,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct OpenAIChatRequest {
     pub model: String,
@@ -26,7 +34,8 @@ pub struct OpenAIChatRequest {
     pub max_tokens: Option<u32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub max_completion_tokens: Option<u32>,
-    pub temperature: f32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -79,6 +88,108 @@ pub struct OpenAICompletionTokensDetails {
     pub rejected_prediction_tokens: u32,
 }
 
+impl OpenAIChatRequest {
+    pub fn new(model: String, messages: Vec<OpenAIMessage>) -> Self {
+        Self {
+            model,
+            messages,
+            temperature: None,
+            max_tokens: None,
+            max_completion_tokens: None,
+            //additional: Map::new(),
+        }
+    }
+
+    // newer models use max_completion_tokens, not max_tokens
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
+        if self.is_newer_model() {
+            self.max_completion_tokens = Some(max_tokens);
+            self.max_tokens = None;
+        } else {
+            self.max_tokens = Some(max_tokens);
+            self.max_completion_tokens = None;
+        }
+        self
+    }
+
+    pub fn with_temperature(mut self, temperature: Option<f32>) -> Self {
+        if self.is_newer_model() {
+            self.temperature = Some(1.0);
+        } else {
+            self.temperature = temperature;
+        }
+        self
+    }
+
+    fn is_newer_model(&self) -> bool {
+        let newer_model_prefixes = [
+            "gpt-5", "o1",
+            // Add more as they're released
+        ];
+
+        newer_model_prefixes
+            .iter()
+            .any(|prefix| self.model.starts_with(prefix))
+    }
+}
+
+impl OpenAIChatRequestBuilder {
+    pub fn new(model: String) -> Self {
+        Self {
+            model,
+            messages: Vec::new(),
+            temperature: None,
+            max_tokens_value: None,
+            //additional_params: Map::new(),
+        }
+    }
+
+    pub fn messages(mut self, messages: Vec<OpenAIMessage>) -> Self {
+        self.messages = messages;
+        self
+    }
+
+    pub fn add_message(mut self, role: &str, content: &str) -> Self {
+        self.messages.push(OpenAIMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+        });
+        self
+    }
+
+    pub fn temperature(mut self, temp: f32) -> Self {
+        self.temperature = Some(temp);
+        self
+    }
+
+    pub fn max_tokens(mut self, tokens: u32) -> Self {
+        self.max_tokens_value = Some(tokens);
+        self
+    }
+
+    /*    pub fn additional_param<T: serde::Serialize>(mut self, key: &str, value: T) -> Self {
+        if let Ok(json_value) = serde_json::to_value(value) {
+            self.additional_params.insert(key.to_string(), json_value);
+        }
+        self
+    }*/
+
+    pub fn build(self) -> OpenAIChatRequest {
+        let mut request = OpenAIChatRequest::new(self.model, self.messages);
+
+        if let Some(temp) = self.temperature {
+            request = request.with_temperature(Some(temp));
+        }
+
+        if let Some(max_tokens) = self.max_tokens_value {
+            request = request.with_max_tokens(max_tokens);
+        }
+
+        //request.additional = self.additional_params;
+        request
+    }
+}
+
 pub async fn call_openai(
     prompt: &str,
     model: Option<&str>,
@@ -97,31 +208,14 @@ pub async fn call_openai(
         model = &config.default_openai_model;
     }
 
-    // todo want to make this more robust and less repetitive
-    let request;
-    if model == "gpt-5" {
-        request = OpenAIChatRequest {
-            model: model.to_string(),
-            max_tokens: None,
-            max_completion_tokens: Some(1024),
-            temperature: 1.0,
-            messages: vec![OpenAIMessage {
-                role: "user".to_string(),
-                content: prompt.to_string(),
-            }],
-        };
-    } else {
-        request = OpenAIChatRequest {
-            model: model.to_string(),
-            max_tokens: Some(2048),
-            max_completion_tokens: None,
-            temperature: 0.5,
-            messages: vec![OpenAIMessage {
-                role: "user".to_string(),
-                content: prompt.to_string(),
-            }],
-        };
-    }
+    let request = OpenAIChatRequestBuilder::new(model.to_string())
+        //.add_message("system", "You are a helpful assistant")
+        .add_message("user", prompt)
+        .temperature(0.5)
+        .max_tokens(500)
+        //.additional_param("top_p", 0.9)
+        //.additional_param("frequency_penalty", 0.1)
+        .build();
 
     let response = client
         .post(&format!("{}/chat/completions", &config.openai_url))
