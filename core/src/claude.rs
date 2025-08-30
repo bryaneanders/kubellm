@@ -141,7 +141,10 @@ pub async fn call_claude(
     let models = get_claude_models().await?;
     // loop over models and make sure the passed in models is valid otherwise use default
     if !models.iter().any(|m| m.id == model) {
-        println!("\r\x1b[2kInvalid model, {}, falling back to default model, {}", model, &config.default_claude_model);
+        println!(
+            "\r\x1b[2kInvalid model, {}, falling back to default model, {}",
+            model, &config.default_claude_model
+        );
         model = &config.default_claude_model;
     }
 
@@ -197,7 +200,8 @@ pub async fn get_claude_models() -> Result<Vec<AnthropicModel>, Box<dyn std::err
 
     if response.status().is_success() {
         let models_response: AnthropicModelsResponse = response.json().await?;
-        let models: Vec<AnthropicModel> = models_response.data;
+        let mut models: Vec<AnthropicModel> = models_response.data;
+        models.sort_by(|a, b| a.id.cmp(&b.id));
 
         Ok(models)
     } else {
