@@ -29,13 +29,81 @@ pub struct Usage {
 #[derive(Debug, Serialize)]
 pub struct ClaudeRequest {
     pub model: String,
+    pub messages: Vec<ClaudeMessage>,
     pub max_tokens: u32,
     pub temperature: f32,
-    pub messages: Vec<Message>,
+}
+
+impl ClaudeRequest {
+    pub fn new(model: String, messages: Vec<ClaudeMessage>) -> Self {
+        Self {
+            model,
+            messages,
+            temperature: 0.5, // default to moderate randomness
+            max_tokens: 1024,
+        }
+    }
+
+    pub fn with_max_tokens(mut self, max_tokens: u32) -> Self {
+        self.max_tokens = max_tokens;
+        self
+    }
+
+    pub fn with_temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
+}
+
+pub struct ClaudeRequestBuilder {
+    pub model: String,
+    pub messages: Vec<ClaudeMessage>,
+    pub max_tokens: u32,
+    pub temperature: f32,
+}
+
+impl ClaudeRequestBuilder {
+    pub fn new(model: String) -> Self {
+        Self {
+            model,
+            messages: Vec::new(),
+            temperature: 0.5,
+            max_tokens: 1024,
+        }
+    }
+
+    pub fn messages(mut self, messages: Vec<ClaudeMessage>) -> Self {
+        self.messages = messages;
+        self
+    }
+
+    pub fn add_message(mut self, role: &str, content: &str) -> Self {
+        self.messages.push(ClaudeMessage {
+            role: role.to_string(),
+            content: content.to_string(),
+        });
+        self
+    }
+
+    pub fn temperature(mut self, temperature: f32) -> Self {
+        self.temperature = temperature;
+        self
+    }
+
+    pub fn max_tokens(mut self, tokens: u32) -> Self {
+        self.max_tokens = tokens;
+        self
+    }
+
+    pub fn build(self) -> ClaudeRequest {
+        ClaudeRequest::new(self.model, self.messages)
+            .with_temperature(self.temperature)
+            .with_max_tokens(self.max_tokens)
+    }
 }
 
 #[derive(Debug, Serialize)]
-pub struct Message {
+pub struct ClaudeMessage {
     pub role: String,
     pub content: String,
 }
@@ -73,18 +141,14 @@ pub async fn call_claude(
     let models = get_claude_models().await?;
     // loop over models and make sure the passed in models is valid otherwise use default
     if !models.iter().any(|m| m.id == model) {
+        println!("\r\x1b[2kInvalid model, {}, falling back to default model, {}", model, &config.default_claude_model);
         model = &config.default_claude_model;
     }
 
-    let request = ClaudeRequest {
-        model: model.to_string(),
-        max_tokens: 1024,
-        temperature: 0.5,
-        messages: vec![Message {
-            role: "user".to_string(),
-            content: prompt.to_string(),
-        }],
-    };
+    let request = ClaudeRequestBuilder::new(model.to_string())
+        .add_message("user", prompt)
+        .max_tokens(1024)
+        .build();
 
     let response = client
         .post(format!("{}/messages", &config.anthropic_url))
