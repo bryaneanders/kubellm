@@ -289,7 +289,7 @@ pub async fn call_openai(
         .build();
 
     let response = client
-        .post(&format!("{}/chat/completions", &config.openai_url))
+        .post(format!("{}/chat/completions", &config.openai_url))
         .header(
             "authorization",
             format!("Bearer {}", &config.openai_key.as_ref().unwrap()),

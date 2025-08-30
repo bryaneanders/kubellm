@@ -13,6 +13,7 @@ use std::io::{self, Write};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::mpsc::UnboundedSender;
+use tokio::task::JoinHandle;
 
 // generates code to parse command line arguments
 #[derive(Parser)]
@@ -522,6 +523,7 @@ async fn execute_command(
                 }
                 Err(e) => {
                     eprintln!("\r\x1b[2K❌ Error calling model: {}", e);
+                    reset_prompt(progress_task, ctrl_c_state).await;
                     return Ok(true);
                 }
             }
@@ -552,15 +554,22 @@ async fn execute_command(
         }
         Commands::Status => {
             println!("\r\x1b[2KChecking database connection...");
-            let _pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
+            let _pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
             println!("\r\x1b[2K✅ Database connection successful");
             println!("Database URL: {}", config.database_url);
         }
         Commands::Exit => {
             println!("\r\x1b[2KGoodbye!");
+            reset_prompt(progress_task, ctrl_c_state).await;
             return Ok(false); // Signal to exit the loop
         }
     }
+    reset_prompt(progress_task, ctrl_c_state).await;
+
+    Ok(true) // Continue the loop
+}
+
+async fn reset_prompt(progress_task: JoinHandle<()>, ctrl_c_state: &Arc<Mutex<CtrlCState>>) {
     progress_task.abort();
     print!("\r\x1b[32mprompt-cli>\x1b[97m\x1b[?25h "); // Show prompt and cursor
     io::stdout().flush().unwrap();
@@ -570,11 +579,9 @@ async fn execute_command(
         state.command_in_progress = false;
         state.interrupt_command = false;
     }
-
-    Ok(true) // Continue the loop
 }
 
-// handle commands like claude prompt -p "what is 2+2?"
+// handle commands like prompt -p "what is 2+2?"
 fn parse_quoted_args(input: &str) -> Vec<String> {
     let mut args = Vec::new();
     let mut current_arg = String::new();

@@ -8,7 +8,7 @@ pub struct CoreConfig {
     pub max_connections: u32,
     pub anthropic_url: String,
     pub anthropic_key: Option<String>,
-    pub default_claude_model: String,
+    pub default_anthropic_model: String,
     pub openai_url: String,
     pub openai_key: Option<String>,
     pub default_openai_model: String,
@@ -33,23 +33,23 @@ impl CoreConfig {
 
         let anthropic_key = env::var("ANTHROPIC_KEY").ok();
 
-        let default_claude_model = env::var("DEFAULT_CLAUDE_MODEL")
+        let default_anthropic_model = env::var("DEFAULT_ANTHROPIC_MODEL")
             .unwrap_or_else(|_| "claude-sonnet-4-20250514".to_string());
 
-        let openai_url = env::var("OPENAI_BASE_URL")
-            .unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
+        let openai_url =
+            env::var("OPENAI_BASE_URL").unwrap_or_else(|_| "https://api.openai.com/v1".to_string());
 
         let openai_key = env::var("OPENAI_KEY").ok();
 
-        let default_openai_model = env::var("DEFAULT_OPENAI_MODEL")
-            .unwrap_or_else(|_| "gpt-5".to_string());
+        let default_openai_model =
+            env::var("DEFAULT_OPENAI_MODEL").unwrap_or_else(|_| "gpt-5".to_string());
 
         Ok(CoreConfig {
             database_url,
             max_connections,
             anthropic_url,
             anthropic_key,
-            default_claude_model,
+            default_anthropic_model,
             openai_url,
             openai_key,
             default_openai_model,
