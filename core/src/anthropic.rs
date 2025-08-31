@@ -1,4 +1,4 @@
-use crate::create_prompt_record;
+use crate::{create_prompt_record, Provider};
 use crate::{CoreConfig, Prompt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -173,10 +173,14 @@ pub async fn call_anthropic(
             .map(|block| block.text.clone())
             .unwrap_or_else(|| "No response content".to_string());
 
-        Ok(
-            create_prompt_record(pool, prompt.to_string(), Some(&response_text), Some(model))
-                .await?,
+        Ok(create_prompt_record(
+            pool,
+            prompt.to_string(),
+            &response_text,
+            model,
+            Provider::Anthropic.to_string().as_str(),
         )
+        .await?)
     } else {
         let error_text = response.text().await?;
         Err(format!("Anthropic API request failed: {}", error_text).into())

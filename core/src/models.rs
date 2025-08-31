@@ -19,7 +19,8 @@ pub struct Prompt {
     pub id: i64,
     pub prompt: String,
     pub model: String,
-    pub response: Option<String>,
+    pub provider: String,
+    pub response: String,
     pub created_at: DateTime<Utc>,
 }
 

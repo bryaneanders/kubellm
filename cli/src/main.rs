@@ -85,6 +85,19 @@ macro_rules! interruptible {
     }};
 }
 
+macro_rules! try_interruptible {
+    ($future:expr, $ctrl_c_state:expr, $progress_task:expr, $error_msg:expr) => {
+        match interruptible!($future, $ctrl_c_state) {
+            Ok(result) => result,
+            Err(e) => {
+                eprintln!("\r\x1b[2K❌ {}: {}", $error_msg, e);
+                reset_prompt($progress_task, $ctrl_c_state).await;
+                return Ok(false);
+            }
+        }
+    };
+}
+
 fn load_history(rl: &mut DefaultEditor) {
     let config = CliConfig::get();
     match config.history_file_path.exists() {
@@ -476,29 +489,62 @@ async fn execute_command(
     match command {
         Commands::InitDb => {
             println!("\r\x1b[2KInitializing database...");
+            let pool = try_interruptible!(
+                create_database_pool(config),
+                &ctrl_c_state,
+                progress_task,
+                "Failed to create database pool"
+            );
 
-            let pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
-
-            interruptible!(init_database(&pool), &ctrl_c_state)?;
-
-            println!("\r\x1b[2K✅ Database initialized successfully");
+            match interruptible!(init_database(&pool), &ctrl_c_state) {
+                Ok(_) => {
+                    println!("\r\x1b[2K✅ Database initialized successfully")
+                }
+                Err(e) => {
+                    eprintln!("\r\x1b[2K❌ Error initializing database: {}", e)
+                }
+            }
         }
         Commands::List => {
-            let pool = interruptible!(create_database_pool(config), &ctrl_c_state)?;
+            let pool = try_interruptible!(
+                create_database_pool(config),
+                &ctrl_c_state,
+                progress_task,
+                "Failed to create database pool"
+            );
 
-            let prompts = interruptible!(get_all_prompts(&pool), &ctrl_c_state)?;
-
-            if prompts.is_empty() {
-                println!("\r\x1b[2KNo prompts found");
-            } else {
-                println!("\r\x1b[2KFound {} prompts:", prompts.len());
-                for prompt in prompts {
-                    println!(
-                        "  [{}] {}: {}",
-                        prompt.id,
-                        prompt.created_at.format("%Y-%m-%d %H:%M:%S"),
-                        prompt.prompt
-                    );
+            match interruptible!(get_all_prompts(&pool), &ctrl_c_state) {
+                Ok(prompts) => {
+                    if prompts.is_empty() {
+                        println!("\r\x1b[2KNo prompts found");
+                    } else {
+                        println!("\r\x1b[2KFound {} prompts:", prompts.len());
+                        for prompt in prompts {
+                            println!(
+                                "  ╭─ [{}] ──────────────────────────────────────────────────────────────────",
+                                prompt.id
+                            );
+                            println!("  │ Prompt:");
+                            let wrapped_prompt = wrap_text_preserving_newlines(&prompt.prompt, 80);
+                            for line in wrapped_prompt {
+                                println!("  │     {}", line);
+                            }
+                            println!("  │ Response: ");
+                            let wrapped_response =
+                                wrap_text_preserving_newlines(&prompt.response, 60);
+                            for line in wrapped_response {
+                                println!("  │     {}", line);
+                            }
+                            println!("  │ Model: {}", prompt.model);
+                            println!("  │ Provider: {}", prompt.provider);
+                            println!("  │ Timestamp: {}", prompt.created_at.timestamp());
+                            println!("  ╰──────────────────────────────────────────────────────────────────────────");
+                            println!();
+                        }
+                    }
+                }
+                Err(e) => {
+                    eprintln!("\r\x1b[2K❌ Error fetching prompts: {}", e)
                 }
             }
         }
@@ -507,18 +553,20 @@ async fn execute_command(
             model,
             provider,
         } => {
-            let pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
+            let pool = try_interruptible!(
+                create_database_pool(config),
+                &ctrl_c_state,
+                progress_task,
+                "Failed to create database pool"
+            );
+
             match interruptible!(
                 prompt_model(&prompt, &provider, model.as_deref(), &pool),
                 ctrl_c_state
             ) {
                 Ok(response) => {
                     println!("\r\x1b[2K✅ Response:");
-                    if let Some(ref resp) = response.response {
-                        println!("{}", resp);
-                    } else {
-                        println!("\r\x1b[2K❌ No response received");
-                    }
+                    println!("{}", response.response);
                     println!("Prompt ID: {}", response.id);
                 }
                 Err(e) => {
@@ -554,13 +602,18 @@ async fn execute_command(
         }
         Commands::Status => {
             println!("\r\x1b[2KChecking database connection...");
-            let _pool = interruptible!(create_database_pool(config), ctrl_c_state)?;
+            let _ = try_interruptible!(
+                create_database_pool(config),
+                &ctrl_c_state,
+                progress_task,
+                "Failed to create database pool"
+            );
             println!("\r\x1b[2K✅ Database connection successful");
             println!("Database URL: {}", config.database_url);
         }
         Commands::Exit => {
-            println!("\r\x1b[2KGoodbye!");
             reset_prompt(progress_task, ctrl_c_state).await;
+            println!("\r\x1b[2KGoodbye!");
             return Ok(false); // Signal to exit the loop
         }
     }
@@ -629,6 +682,43 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
     }
 
     args
+}
+
+fn wrap_text_preserving_newlines(text: &str, width: usize) -> Vec<String> {
+    let mut result = Vec::new();
+
+    // Split by existing newlines first
+    for paragraph in text.split('\n') {
+        if paragraph.trim().is_empty() {
+            result.push(String::new()); // Preserve empty lines
+            continue;
+        }
+        // todo handle bold text and code blocks
+
+        let indent_prefix = if paragraph.starts_with("-") { " " } else { "" };
+
+        // Then wrap each paragraph
+        let mut current_line = String::new();
+        for word in paragraph.split_whitespace() {
+            if current_line.len() + word.len() + 1 > width && !current_line.is_empty() {
+                result.push(current_line);
+                current_line = String::new();
+                current_line.push_str(indent_prefix);
+            }
+
+            if !current_line.is_empty() {
+                current_line.push(' ');
+            }
+
+            current_line.push_str(word);
+        }
+
+        if !current_line.is_empty() {
+            result.push(current_line);
+        }
+    }
+
+    result
 }
 
 fn show_help() {

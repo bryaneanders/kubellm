@@ -31,8 +31,9 @@ pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
         CREATE TABLE IF NOT EXISTS prompts (
             id INTEGER PRIMARY KEY AUTO_INCREMENT,
             prompt TEXT NOT NULL,
-            response MEDIUMTEXT DEFAULT NULL,
-            model VARCHAR(255) DEFAULT NULL,
+            response MEDIUMTEXT NOT NULL,
+            model VARCHAR(255) NOT NULL,
+            provider VARCHAR(255) NOT NULL,
             created_at DATETIME NOT NULL
         );
         "#,
@@ -46,26 +47,29 @@ pub async fn init_database(pool: &MySqlPool) -> Result<(), sqlx::Error> {
 pub async fn create_prompt_record(
     pool: &MySqlPool,
     prompt: String,
-    response: Option<&str>, // save the response or null if not provided
-    model: Option<&str>,    // save the model or null if not provided
+    response: &str,
+    model: &str,
+    provider: &str,
 ) -> Result<Prompt, sqlx::Error> {
     let insert_result = sqlx::query(
-        "INSERT INTO prompts (prompt, response, model, created_at) VALUES (?, ?, ?, ?)",
+        "INSERT INTO prompts (prompt, response, model, provider, created_at) VALUES (?, ?, ?, ?, ?)",
     )
     .bind(&prompt)
     .bind(response)
     .bind(model)
+    .bind(provider)
     .bind(Utc::now().naive_utc())
     .execute(pool)
     .await?;
 
     let id = insert_result.last_insert_id() as i64;
 
-    let row =
-        sqlx::query("SELECT id, prompt, response, model, created_at  FROM prompts WHERE id = ?")
-            .bind(id)
-            .fetch_one(pool)
-            .await?;
+    let row = sqlx::query(
+        "SELECT id, prompt, response, model, provider, created_at  FROM prompts WHERE id = ?",
+    )
+    .bind(id)
+    .fetch_one(pool)
+    .await?;
 
     let naive_datetime: NaiveDateTime = row.get("created_at");
 
@@ -74,13 +78,14 @@ pub async fn create_prompt_record(
         prompt: row.get("prompt"),
         response: row.get("response"),
         model: row.get("model"),
+        provider: row.get("provider"),
         created_at: naive_datetime.and_utc(),
     })
 }
 
 pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Error> {
     let rows = sqlx::query(
-        "SELECT id, prompt, response, model, created_at FROM prompts ORDER BY created_at DESC",
+        "SELECT id, prompt, response, model, provider, created_at FROM prompts ORDER BY created_at DESC",
     )
     .fetch_all(pool)
     .await?;
@@ -94,6 +99,7 @@ pub async fn get_all_prompts(pool: &MySqlPool) -> Result<Vec<Prompt>, sqlx::Erro
                 prompt: row.get("prompt"),
                 response: row.get("response"),
                 model: row.get("model"),
+                provider: row.get("provider"),
                 created_at: naive_datetime.and_utc(),
             }
         })
