@@ -1,4 +1,4 @@
-use crate::create_prompt_record;
+use crate::{create_prompt_record, Provider};
 use crate::{CoreConfig, Prompt};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
@@ -304,10 +304,14 @@ pub async fn call_openai(
         if let Some(choice) = chat_response.choices.first() {
             let repose_text = choice.message.content.as_str();
 
-            Ok(
-                create_prompt_record(pool, prompt.to_string(), Some(repose_text), Some(model))
-                    .await?,
+            Ok(create_prompt_record(
+                pool,
+                prompt.to_string(),
+                repose_text,
+                model,
+                Provider::OpenAI.to_string().as_str(),
             )
+            .await?)
         } else {
             Err("No choices returned from OpenAI API".into())
         }
