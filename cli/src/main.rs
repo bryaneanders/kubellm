@@ -688,12 +688,12 @@ fn wrap_text_preserving_newlines(text: &str, width: usize) -> Vec<String> {
     let mut result = Vec::new();
 
     // Split by existing newlines first
+    let mut bold_section = false;
     for paragraph in text.split('\n') {
         if paragraph.trim().is_empty() {
             result.push(String::new()); // Preserve empty lines
             continue;
         }
-        // todo handle bold text and code blocks
 
         let indent_prefix = if paragraph.starts_with("-") { " " } else { "" };
 
@@ -710,7 +710,11 @@ fn wrap_text_preserving_newlines(text: &str, width: usize) -> Vec<String> {
                 current_line.push(' ');
             }
 
-            current_line.push_str(word);
+            let mut processed_word = word.to_string();
+            handle_bold_formatting(&mut bold_section, &mut processed_word);
+            // todo handle code blocks
+
+            current_line.push_str(&processed_word);
         }
 
         if !current_line.is_empty() {
@@ -719,6 +723,18 @@ fn wrap_text_preserving_newlines(text: &str, width: usize) -> Vec<String> {
     }
 
     result
+}
+
+fn handle_bold_formatting(bold_section: &mut bool, processed_word: &mut String) {
+    while processed_word.contains("**") {
+        *processed_word = if *bold_section {
+            *bold_section = false;
+            processed_word.replacen("**", "\x1b[22;24m", 1)
+        } else {
+            *bold_section = true;
+            processed_word.replacen("**", "\x1b[1;4m", 1)
+        }
+    }
 }
 
 fn show_help() {
