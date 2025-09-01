@@ -6,6 +6,7 @@ use kubellm_core::{
     create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
     Provider,
 };
+use prompts_cli::KeywordChecker;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::fs::File;
@@ -395,7 +396,6 @@ fn crate_rustyline_background_loop(
 
                                 // Clear the current line and show message
                                 println!("\r\x1b[2K\x1b[1APress Ctrl+C again within 2 seconds to force exit...");
-                                io::stdout().flush().unwrap();
                             }
                         }
                     }
@@ -687,42 +687,140 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
 fn wrap_text_preserving_newlines(text: &str, width: usize) -> Vec<String> {
     let mut result = Vec::new();
 
+    let start_code_block_section = "\x1b[36m\x1b[40m";
+    let start_comment_section = "\x1b[38;5;92m\x1b[40m";
+    let end_code_block_section = "\x1b[97m\x1b[49m";
+
     // Split by existing newlines first
     let mut bold_section = false;
+    let mut code_block_section = false;
+    let mut multi_line_comment_section = false;
+
+    let mut language: String = "".to_string();
     for paragraph in text.split('\n') {
+        //let mut paragraph = paragraph.to_string();
         if paragraph.trim().is_empty() {
-            result.push(String::new()); // Preserve empty lines
+            let mut current_line: String = String::new();
+            if code_block_section {
+                current_line.push_str(start_code_block_section);
+                pad_code_block_line(&mut current_line, 0, width);
+                current_line.push_str(end_code_block_section);
+            }
+            result.push(current_line); // Preserve empty lines
             continue;
         }
 
         let indent_prefix = if paragraph.starts_with("-") { " " } else { "" };
 
-        // Then wrap each paragraph
         let mut current_line = String::new();
+        // need this so that escape characters don't count towards the length of the line
+        let mut unformatted_line = String::new();
+        if code_block_section {
+            //pad_code_block_line(&mut current_line, width);
+            current_line.push_str(start_code_block_section);
+        }
+
+        let mut single_line_comment_section = false;
+        let mut code_block_double_quote_section = false;
+        let mut code_block_single_quote_section = false;
         for word in paragraph.split_whitespace() {
-            if current_line.len() + word.len() + 1 > width && !current_line.is_empty() {
+            if unformatted_line.len() + word.len() + 1 > width && !unformatted_line.is_empty() {
+                current_line.push_str(end_code_block_section);
                 result.push(current_line);
                 current_line = String::new();
+                unformatted_line = String::new();
+                if code_block_section {
+                    if !(single_line_comment_section || multi_line_comment_section) {
+                        current_line.push_str(start_code_block_section);
+                    } else if single_line_comment_section || multi_line_comment_section {
+                        current_line.push_str(start_comment_section);
+                        current_line.push_str("    ");
+                        unformatted_line.push_str("    ");
+                    }
+                }
                 current_line.push_str(indent_prefix);
             }
 
+            // add space between words
             if !current_line.is_empty() {
+                unformatted_line.push(' ');
                 current_line.push(' ');
             }
 
             let mut processed_word = word.to_string();
-            handle_bold_formatting(&mut bold_section, &mut processed_word);
-            // todo handle code blocks
+            // don't handle bold in code block
+            if processed_word.contains("**") && !code_block_section {
+                handle_bold_formatting(&mut bold_section, &mut processed_word);
+            }
+
+            if processed_word.contains("```")
+            /* || code_block_section*/
+            {
+                // todo stop bold?
+                handle_code_block_formatting(
+                    &mut code_block_section,
+                    &mut processed_word,
+                    &mut language,
+                );
+            }
+
+            // after here its just formatting, not the word itself
+            unformatted_line.push_str(&processed_word);
+
+            // handle comment flags
+            if processed_word.contains("//") && code_block_section && !multi_line_comment_section {
+                single_line_comment_section = true;
+                current_line.insert_str(current_line.len(), start_comment_section);
+            } else if processed_word.contains("/*")
+                && code_block_section
+                && !single_line_comment_section
+                && !multi_line_comment_section
+            {
+                multi_line_comment_section = true;
+                current_line.insert_str(current_line.len(), start_comment_section);
+            } else if processed_word.contains("*/")
+                && code_block_section
+                && multi_line_comment_section
+            {
+                multi_line_comment_section = false;
+                processed_word.insert_str(processed_word.len(), start_code_block_section);
+            }
+
+            if code_block_section && !single_line_comment_section && !multi_line_comment_section {
+                handle_syntax_highlighting(
+                    &mut processed_word,
+                    &language,
+                    &mut code_block_single_quote_section,
+                    &mut code_block_double_quote_section,
+                )
+            }
 
             current_line.push_str(&processed_word);
         }
 
         if !current_line.is_empty() {
+            if code_block_section {
+                pad_code_block_line(&mut current_line, unformatted_line.len(), width);
+                current_line.push_str(end_code_block_section);
+            }
             result.push(current_line);
         }
     }
 
     result
+}
+
+fn pad_code_block_line(
+    formatted_line: &mut String,
+    unformatted_line_length: usize,
+    line_len: usize,
+) {
+    if unformatted_line_length < line_len {
+        formatted_line.insert_str(
+            formatted_line.len(),
+            &" ".repeat(line_len - unformatted_line_length),
+        );
+    }
 }
 
 fn handle_bold_formatting(bold_section: &mut bool, processed_word: &mut String) {
@@ -734,6 +832,64 @@ fn handle_bold_formatting(bold_section: &mut bool, processed_word: &mut String) 
             *bold_section = true;
             processed_word.replacen("**", "\x1b[1;4m", 1)
         }
+    }
+}
+
+fn handle_code_block_formatting(
+    code_block_section: &mut bool,
+    processed_word: &mut String,
+    language: &mut String,
+) {
+    if !*code_block_section {
+        *code_block_section = true;
+        *language = processed_word.replace("```", "").replace("\n", "");
+        *processed_word = "".to_string();
+    } else {
+        *code_block_section = false;
+        *language = "".to_string();
+        *processed_word = processed_word.replace("```", "\r\x1b[97m\x1b[49m\x1b[K  |");
+    }
+}
+
+fn handle_syntax_highlighting(
+    processed_word: &mut String,
+    language: &str,
+    code_block_single_quote_section: &mut bool,
+    code_block_double_quote_section: &mut bool,
+) {
+    // only currently implemented at all for rust
+    if language == "rust" {
+        match KeywordChecker::is_keyword(processed_word, language) {
+            Ok(is_keyword) => {
+                if is_keyword {
+                    processed_word.insert_str(0, "\x1b[38;5;215m");
+                    processed_word.insert_str(processed_word.len(), "\x1b[36m");
+                }
+            }
+            Err(_) => {}
+        }
+    }
+
+    if processed_word.contains("\"") || processed_word.contains("'") {
+        let mut edited_word = processed_word.clone();
+        let mut offset = 0;
+        for (i, c) in processed_word.chars().enumerate() {
+            if (c == '"' && !*code_block_single_quote_section)
+                || (c == '\'' && !*code_block_double_quote_section)
+            {
+                // todo need to handle quotes inside quotes
+                if *code_block_double_quote_section {
+                    *code_block_double_quote_section = false;
+                    edited_word.insert_str(i + offset + 1, "\x1b[36m");
+                    offset += "\x1b[36m".len();
+                } else {
+                    *code_block_double_quote_section = true;
+                    edited_word.insert_str(i + offset, "\x1b[32m");
+                    offset += "\x1b[32m".len();
+                }
+            }
+        }
+        *processed_word = edited_word;
     }
 }
 
