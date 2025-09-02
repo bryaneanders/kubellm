@@ -19,6 +19,12 @@ pub struct PromptFormatter {
     code_block_single_quote_section: bool,
 }
 
+impl Default for PromptFormatter {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl PromptFormatter {
     pub fn new() -> Self {
         Self {
@@ -57,6 +63,7 @@ impl PromptFormatter {
                 current_line.push_str(START_CODE_BLOCK_SECTION_ESC);
             }
 
+            self.single_line_comment_section = false;
             for word in paragraph.split_whitespace() {
                 if unformatted_line.len() + word.len() + 1 > width && !unformatted_line.is_empty() {
                     current_line.push_str(END_CODE_BLOCK_SECTION_ESC);
@@ -89,9 +96,9 @@ impl PromptFormatter {
                 }
 
                 if processed_word.contains("```") {
+                    self.handle_code_block_formatting(&mut processed_word, &mut language);
                     self.bold_section = false;
                     processed_word.insert_str(processed_word.len(), NON_BOLD_TEXT_ESC);
-                    self.handle_code_block_formatting(&mut processed_word, &mut language);
                 }
 
                 // after here its just formatting, not the word itself
@@ -180,7 +187,7 @@ impl PromptFormatter {
     fn handle_code_block_formatting(&mut self, processed_word: &mut String, language: &mut String) {
         if !self.code_block_section {
             self.code_block_section = true;
-            *language = processed_word.replace("```", "").replace("\n", "");
+            *language = processed_word.replace("```", "").replace("[.*", "");
             *processed_word = "".to_owned();
         } else {
             self.code_block_section = false;
@@ -195,15 +202,12 @@ impl PromptFormatter {
     /// Handles text color changes for different syntax highlighting situations
     fn handle_syntax_highlighting(&mut self, processed_word: &mut String, language: &str) {
         // only currently implemented at all for rust, java, bash
-        match KeywordChecker::is_keyword(processed_word, language) {
-            Ok(is_keyword) => {
-                if is_keyword {
-                    processed_word.insert_str(0, SYNTAX_HIGHLIGHTING_ESC);
-                    processed_word
-                        .insert_str(processed_word.len(), STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
-                }
+        if let Ok(is_keyword) = KeywordChecker::is_keyword(processed_word, language) {
+            if is_keyword {
+                processed_word.insert_str(0, SYNTAX_HIGHLIGHTING_ESC);
+                processed_word.insert_str(processed_word.len(), STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
+                return;
             }
-            Err(_) => {}
         }
 
         if processed_word.contains("\"") || processed_word.contains("'") {
@@ -211,16 +215,24 @@ impl PromptFormatter {
             let mut offset = 0;
 
             for (i, c) in processed_word.chars().enumerate() {
-                // todo have to handle escape characters
                 if (c == '"' && !self.code_block_single_quote_section)
                     || (c == '\'' && !self.code_block_double_quote_section)
-                { // todo this is not handling both quote vars right
-                    if self.code_block_double_quote_section {
-                        self.code_block_double_quote_section = false;
+                {
+                    if self.code_block_single_quote_section || self.code_block_double_quote_section
+                    {
+                        if c == '\'' {
+                            self.code_block_single_quote_section = false;
+                        } else {
+                            self.code_block_double_quote_section = false;
+                        }
                         edited_word.insert_str(i + offset + 1, STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
                         offset += STANDARD_CODE_BLOCK_TEXT_COLOR_ESC.len();
                     } else {
-                        self.code_block_double_quote_section = true;
+                        if c == '\'' {
+                            self.code_block_single_quote_section = true;
+                        } else {
+                            self.code_block_double_quote_section = true;
+                        }
                         edited_word.insert_str(i + offset, QUOTED_CODE_BLOCK_TEXT_COLOR_ESC);
                         offset += QUOTED_CODE_BLOCK_TEXT_COLOR_ESC.len();
                     }
