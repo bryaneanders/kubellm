@@ -1,5 +1,4 @@
 use crate::KeywordChecker;
-use linked_hash_map::LinkedHashMap;
 
 const STANDARD_CODE_BLOCK_TEXT_COLOR_ESC: &str = "\x1b[39m";
 const QUOTED_CODE_BLOCK_TEXT_COLOR_ESC: &str = "\x1b[32m";
@@ -9,17 +8,20 @@ const END_CODE_BLOCK_SECTION_ESC: &str = "\x1b[97m\x1b[49m";
 const SYNTAX_HIGHLIGHTING_ESC: &str = "\x1b[38;5;215m";
 const NON_BOLD_TEXT_ESC: &str = "\x1b[22;24m";
 const BOLD_TEXT_ESC: &str = "\x1b[1;4m";
+const DEFAULT_WIDTH: usize = 60;
+const MAX_WIDTH: usize = 121;
 
 #[derive(Debug)]
 pub struct PromptFormatter {
     bold_section: bool,
     code_block_section: bool,
+    language: String,
     single_line_comment_section: bool,
     multi_line_comment_section: bool,
     code_block_double_quote_section: bool,
     code_block_single_quote_section: bool,
-    code_block_strings: LinkedHashMap<String, String>,
-    longest_code_block_string: usize,
+    width: usize,
+    code_block_width: usize,
 }
 
 impl Default for PromptFormatter {
@@ -33,29 +35,31 @@ impl PromptFormatter {
         Self {
             bold_section: false,
             code_block_section: false,
+            language: "".to_owned(),
             multi_line_comment_section: false,
             single_line_comment_section: false,
             code_block_double_quote_section: false,
             code_block_single_quote_section: false,
-            code_block_strings: LinkedHashMap::new(),
-            longest_code_block_string: 0,
+            width: DEFAULT_WIDTH,
+            code_block_width: DEFAULT_WIDTH,
         }
     }
 
     /// Takes string and formats it to wrap at a width and format it for emphasis and markdown code blocks
     pub fn format_prompt(&mut self, text: &str, width: usize) -> Vec<String> {
         let mut formatted_prompt = Vec::new();
-        let mut language: String = "".to_owned();
+        self.width = width;
+        self.code_block_width = width;
+        self.determine_max_width(text);
 
         for paragraph in text.split('\n') {
             if paragraph.trim().is_empty() {
                 let mut current_line: String = String::new();
                 if self.code_block_section {
                     current_line.push_str(START_CODE_BLOCK_SECTION_ESC);
-                    self.code_block_strings.insert("".to_string(), current_line);
-                } else {
-                    formatted_prompt.push(current_line); // Preserve empty lines
+                    self.pad_code_block_line(&mut current_line, 0);
                 }
+                formatted_prompt.push(current_line); // Preserve empty lines
                 continue;
             }
 
@@ -75,17 +79,17 @@ impl PromptFormatter {
             self.single_line_comment_section = false;
             for word in paragraph.split_whitespace() {
                 // handle line wrap
-                if unformatted_line.len() + word.len() + 1 > width && !unformatted_line.is_empty() {
-                    if self.code_block_section {
-                        if unformatted_line.len() > self.longest_code_block_string {
-                            self.longest_code_block_string = unformatted_line.len();
-                        }
+                let width_to_use = if self.code_block_section {
+                    self.code_block_width
+                } else {
+                    self.width
+                };
 
-                        self.code_block_strings
-                            .insert(unformatted_line, current_line);
-                    } else {
-                        formatted_prompt.push(current_line);
+                if unformatted_line.len() + word.len() + 2 > width_to_use && !unformatted_line.is_empty() {
+                    if self.code_block_section {
+                        self.pad_code_block_line(&mut current_line, unformatted_line.len())
                     }
+                    formatted_prompt.push(current_line);
 
                     current_line = indent.to_owned();
                     unformatted_line = unformatted_indent.to_owned();
@@ -106,12 +110,7 @@ impl PromptFormatter {
                 }
 
                 if processed_word.contains("```") {
-                    self.handle_code_block_formatting(
-                        &mut processed_word,
-                        &mut language,
-                        width,
-                        &mut formatted_prompt,
-                    );
+                    self.handle_code_block_formatting(&mut processed_word);
                     self.bold_section = false;
                     processed_word.insert_str(processed_word.len(), NON_BOLD_TEXT_ESC);
                     if self.code_block_section {
@@ -132,7 +131,7 @@ impl PromptFormatter {
                     && !self.single_line_comment_section
                     && !self.multi_line_comment_section
                 {
-                    self.handle_syntax_highlighting(&mut processed_word, &language)
+                    self.handle_syntax_highlighting(&mut processed_word)
                 }
 
                 current_line.push_str(&processed_word);
@@ -140,14 +139,9 @@ impl PromptFormatter {
 
             if !current_line.trim().is_empty() {
                 if self.code_block_section {
-                    if unformatted_line.len() > self.longest_code_block_string {
-                        self.longest_code_block_string = unformatted_line.len();
-                    }
-                    self.code_block_strings
-                        .insert(unformatted_line, current_line);
-                } else {
-                    formatted_prompt.push(current_line);
+                    self.pad_code_block_line(&mut current_line, unformatted_line.len())
                 }
+                formatted_prompt.push(current_line);
             }
         }
 
@@ -218,40 +212,14 @@ impl PromptFormatter {
     fn handle_code_block_formatting(
         &mut self,
         processed_word: &mut String,
-        language: &mut String,
-        width: usize,
-        formatted_prompt: &mut Vec<String>,
     ) {
         if !self.code_block_section {
             self.code_block_section = true;
-            self.code_block_strings = LinkedHashMap::new();
-            self.longest_code_block_string = width;
-            *language = processed_word.replace("```", "").replace("[.*", "");
+            self.language = processed_word.replace("```", "").replace("[.*", "");
             *processed_word = format!("\x1b[1A\x1b[2K{}", END_CODE_BLOCK_SECTION_ESC)
         } else {
             self.code_block_section = false;
-            // pad all lines to the longest code block line length if longer than width
-            let unpadded_lines: Vec<_> = self.code_block_strings.keys().cloned().collect();
-            for unformatted_line in unpadded_lines {
-                let current_len = if unformatted_line.len() < width {
-                    unformatted_line.len()
-                } else {
-                    width
-                };
-                match self.code_block_strings.get_mut(&unformatted_line) {
-                    formatted_line => {
-                        let mut formatted_line = formatted_line.unwrap();
-                        pad_code_block_line(
-                            &mut formatted_line,
-                            self.longest_code_block_string - current_len,
-                        );
-                        formatted_line.push_str(END_CODE_BLOCK_SECTION_ESC);
-                    }
-                }
-            }
-            formatted_prompt.extend(self.code_block_strings.values().cloned());
-
-            *language = "".to_owned();
+            self.language = "".to_owned();
             *processed_word = processed_word.replace(
                 "```",
                 format!("\r{}\x1b[K  |", END_CODE_BLOCK_SECTION_ESC).as_str(),
@@ -260,10 +228,10 @@ impl PromptFormatter {
     }
 
     /// Handles text color changes for different syntax highlighting situations
-    fn handle_syntax_highlighting(&mut self, processed_word: &mut String, language: &str) {
+    fn handle_syntax_highlighting(&mut self, processed_word: &mut String) {
         // only currently implemented at all for rust, java, bash
         if self.code_block_single_quote_section || !self.code_block_double_quote_section {
-            if let Ok(is_keyword) = KeywordChecker::is_keyword(processed_word, language) {
+            if let Ok(is_keyword) = KeywordChecker::is_keyword(processed_word, &self.language) {
                 if is_keyword {
                     if processed_word.contains("for") {
                         println!("Processed word containing for: {}", processed_word);
@@ -309,13 +277,52 @@ impl PromptFormatter {
             *processed_word = edited_word;
         }
     }
-}
 
-/// Pad the end of code block lines to the width to maintain a constant appearance
-fn pad_code_block_line(formatted_line: &mut String, pad_length: usize) {
-    if pad_length > 0 {
-        formatted_line.push_str(START_CODE_BLOCK_SECTION_ESC);
-        formatted_line.insert_str(formatted_line.len(), &" ".repeat(pad_length));
+    pub fn determine_max_width(&mut self, text: &str) {
+        for paragraph in text.split('\n') {
+            if paragraph.trim().is_empty() {
+                continue;
+            }
+
+            let leading_whitespace = paragraph.len() - paragraph.trim_start().len();
+            let indent = paragraph[..leading_whitespace].to_string();
+            let mut current_line = indent.clone();
+
+            for word in paragraph.split_whitespace() {
+                if !current_line.is_empty() {
+                    current_line.push(' ');
+                }
+
+                let word = word.replace("**", "").replace("```", "");
+                current_line.push_str(&word);
+
+                // 2 is for space between string and word and 1 pad char at the end
+                let next_word_str_len = current_line.len() + word.len() + 2;
+                let mut one_word_str_len = indent.len() + word.len() + 2;
+                if current_line.contains(" ") {
+                    one_word_str_len += 4; // extra indent
+                }
+
+                if one_word_str_len > self.code_block_width && one_word_str_len < MAX_WIDTH {
+                    self.code_block_width = one_word_str_len;
+                    current_line = indent.to_owned();
+                } else if one_word_str_len >= MAX_WIDTH {
+                    self.code_block_width = MAX_WIDTH - 1; // 1 space of padding at the end
+                    return;
+                } else if next_word_str_len > self.code_block_width {
+                    current_line = indent.to_owned();
+                    continue;
+                }
+            }
+        }
+    }
+
+    /// Pad the end of code block lines to the width to maintain a constant appearance
+    fn pad_code_block_line(&mut self, formatted_line: &mut String, unformatted_line_len: usize) {
+        //formatted_line.push_str(START_CODE_BLOCK_SECTION_ESC);
+        if unformatted_line_len < self.code_block_width {
+            formatted_line.push_str(&" ".repeat(self.code_block_width - unformatted_line_len));
+        }
         formatted_line.push_str(END_CODE_BLOCK_SECTION_ESC);
     }
 }
