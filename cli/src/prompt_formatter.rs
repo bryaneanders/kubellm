@@ -8,7 +8,7 @@ const END_CODE_BLOCK_SECTION_ESC: &str = "\x1b[97m\x1b[49m";
 const SYNTAX_HIGHLIGHTING_ESC: &str = "\x1b[38;5;215m";
 const NON_BOLD_TEXT_ESC: &str = "\x1b[22;24m";
 const BOLD_TEXT_ESC: &str = "\x1b[1;4m";
-const DEFAULT_WIDTH: usize = 60;
+const DEFAULT_WIDTH: usize = 80;
 const MAX_WIDTH: usize = 121;
 
 #[derive(Debug)]
@@ -85,7 +85,10 @@ impl PromptFormatter {
                     self.width
                 };
 
-                if unformatted_line.len() + word.len() + 2 > width_to_use && !unformatted_line.is_empty() {
+                // todo handle wrapping strings with " + "
+                if unformatted_line.len() + word.len() + 2 > width_to_use
+                    && !unformatted_line.is_empty()
+                {
                     if self.code_block_section {
                         self.pad_code_block_line(&mut current_line, unformatted_line.len())
                     }
@@ -121,7 +124,6 @@ impl PromptFormatter {
                     }
                 }
 
-                // after here its just formatting, not the word itself
                 unformatted_line.push_str(&processed_word);
 
                 // handle comment flags
@@ -154,8 +156,10 @@ impl PromptFormatter {
         unformatted_line: &mut String,
     ) {
         if self.code_block_section {
-            if !(self.single_line_comment_section || self.multi_line_comment_section)
-                && !(self.code_block_single_quote_section || self.code_block_double_quote_section)
+            if !(self.single_line_comment_section
+                || self.multi_line_comment_section
+                || self.code_block_single_quote_section
+                || self.code_block_double_quote_section)
             {
                 current_line.push_str(START_CODE_BLOCK_SECTION_ESC);
             } else if self.single_line_comment_section || self.multi_line_comment_section {
@@ -209,10 +213,7 @@ impl PromptFormatter {
     }
 
     /// Turns on and off code block formatting
-    fn handle_code_block_formatting(
-        &mut self,
-        processed_word: &mut String,
-    ) {
+    fn handle_code_block_formatting(&mut self, processed_word: &mut String) {
         if !self.code_block_section {
             self.code_block_section = true;
             self.language = processed_word.replace("```", "").replace("[.*", "");
@@ -302,6 +303,8 @@ impl PromptFormatter {
                 if current_line.contains(" ") {
                     one_word_str_len += 4; // extra indent
                 }
+
+                // todo handle wrapping strings with " + "
 
                 if one_word_str_len > self.code_block_width && one_word_str_len < MAX_WIDTH {
                     self.code_block_width = one_word_str_len;

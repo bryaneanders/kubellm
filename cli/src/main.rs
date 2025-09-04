@@ -526,13 +526,13 @@ async fn execute_command(
                                 prompt.id
                             );
                             println!("  │ Prompt:");
-                            let wrapped_prompt = prompt_formatter.format_prompt(&prompt.prompt, 60);
+                            let wrapped_prompt = prompt_formatter.format_prompt(&prompt.prompt, 80);
                             for line in wrapped_prompt {
                                 println!("  │     {}", line);
                             }
                             println!("  │ Response: ");
                             let wrapped_response =
-                                prompt_formatter.format_prompt(&prompt.response, 60);
+                                prompt_formatter.format_prompt(&prompt.response, 80);
                             for line in wrapped_response {
                                 println!("  │     {}", line);
                             }
