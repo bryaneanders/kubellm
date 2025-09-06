@@ -13,6 +13,7 @@ const MAX_WIDTH: usize = 121;
 
 #[derive(Debug)]
 pub struct PromptFormatter {
+    formatted_prompt: Vec<String>,
     bold_section: bool,
     code_block_section: bool,
     language: String,
@@ -33,6 +34,7 @@ impl Default for PromptFormatter {
 impl PromptFormatter {
     pub fn new() -> Self {
         Self {
+            formatted_prompt: Vec::new(),
             bold_section: false,
             code_block_section: false,
             language: "".to_owned(),
@@ -46,8 +48,10 @@ impl PromptFormatter {
     }
 
     /// Takes string and formats it to wrap at a width and format it for emphasis and markdown code blocks
-    pub fn format_prompt(&mut self, text: &str, width: usize) -> Vec<String> {
-        let mut formatted_prompt = Vec::new();
+    pub fn format_prompt(&mut self, text: &str, width: usize) -> &Vec<String> {
+        if !self.formatted_prompt.is_empty() {
+            self.formatted_prompt = Vec::new();
+        }
         self.width = width;
         self.code_block_width = width;
         self.determine_max_width(text);
@@ -55,7 +59,7 @@ impl PromptFormatter {
         for paragraph in text.split('\n') {
             // empty line
             if paragraph.trim().is_empty() {
-                self.add_formatted_line(&mut formatted_prompt, 0, String::new());
+                self.add_formatted_line(0, String::new());
                 continue;
             }
 
@@ -64,14 +68,13 @@ impl PromptFormatter {
             let leading_whitespace = paragraph.len() - paragraph.trim_start().len();
             let unformatted_indent = paragraph[..leading_whitespace].to_string();
             let mut indent = unformatted_indent.clone();
-
-            // need this so that escape characters don't count towards the length of the line
-            let mut unformatted_line = unformatted_indent.to_owned();
             if self.code_block_section {
                 indent.insert_str(0, START_CODE_BLOCK_SECTION_ESC);
             }
 
             let mut current_line = indent.to_owned();
+            // need this so that escape characters don't count towards the length of the line
+            let mut unformatted_line = unformatted_indent.to_owned();
 
             self.single_line_comment_section = false;
             for word in paragraph.split_whitespace() {
@@ -86,7 +89,7 @@ impl PromptFormatter {
                 if unformatted_line.len() + word.len() + 2 > width_to_use
                     && !unformatted_line.is_empty()
                 {
-                    self.add_formatted_line(&mut formatted_prompt, unformatted_line.len(), current_line);
+                    self.add_formatted_line(unformatted_line.len(), current_line);
 
                     // start new lines with the same level of indent
                     current_line = indent.to_owned();
@@ -116,7 +119,7 @@ impl PromptFormatter {
                     if self.code_block_section {
                         current_line = "".to_owned();
                         unformatted_line = "".to_owned();
-                        formatted_prompt.push("\x1b[1A".to_owned());
+                        self.formatted_prompt.push("\x1b[1A".to_owned());
                         break;
                     }
                 }
@@ -137,18 +140,18 @@ impl PromptFormatter {
                 current_line.push_str(&processed_word);
             }
 
-            self.add_formatted_line(&mut formatted_prompt, unformatted_line.len(), current_line);
+            self.add_formatted_line(unformatted_line.len(), current_line);
         }
 
-        formatted_prompt
+        &self.formatted_prompt
     }
 
-    fn add_formatted_line(&mut self, formatted_prompt: &mut Vec<String>, unformatted_line_len : usize, mut current_line: String) {
+    fn add_formatted_line(&mut self, unformatted_line_len: usize, mut current_line: String) {
         if !current_line.trim().is_empty() {
             if self.code_block_section {
                 self.pad_code_block_line(&mut current_line, unformatted_line_len)
             }
-            formatted_prompt.push(current_line);
+            self.formatted_prompt.push(current_line);
         }
     }
 
