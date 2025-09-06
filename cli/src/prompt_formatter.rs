@@ -53,21 +53,18 @@ impl PromptFormatter {
         self.determine_max_width(text);
 
         for paragraph in text.split('\n') {
+            // empty line
             if paragraph.trim().is_empty() {
-                let mut current_line: String = String::new();
-                if self.code_block_section {
-                    current_line.push_str(START_CODE_BLOCK_SECTION_ESC);
-                    self.pad_code_block_line(&mut current_line, 0);
-                }
-                formatted_prompt.push(current_line); // Preserve empty lines
+                self.add_formatted_line(&mut formatted_prompt, 0, String::new());
                 continue;
             }
 
+            // get the level of indent to preserve for code blocks.
             let indent_prefix = if paragraph.starts_with("-") { " " } else { "" };
-
             let leading_whitespace = paragraph.len() - paragraph.trim_start().len();
             let unformatted_indent = paragraph[..leading_whitespace].to_string();
             let mut indent = unformatted_indent.clone();
+
             // need this so that escape characters don't count towards the length of the line
             let mut unformatted_line = unformatted_indent.to_owned();
             if self.code_block_section {
@@ -89,11 +86,9 @@ impl PromptFormatter {
                 if unformatted_line.len() + word.len() + 2 > width_to_use
                     && !unformatted_line.is_empty()
                 {
-                    if self.code_block_section {
-                        self.pad_code_block_line(&mut current_line, unformatted_line.len())
-                    }
-                    formatted_prompt.push(current_line);
+                    self.add_formatted_line(&mut formatted_prompt, unformatted_line.len(), current_line);
 
+                    // start new lines with the same level of indent
                     current_line = indent.to_owned();
                     unformatted_line = unformatted_indent.to_owned();
 
@@ -101,17 +96,19 @@ impl PromptFormatter {
                     current_line.push_str(indent_prefix);
                 }
 
+                // add space between words
                 if !current_line.is_empty() {
                     current_line.push(' ');
                     unformatted_line.push(' ');
                 }
 
                 let mut processed_word = word.to_owned();
-                // don't handle bold in code block
+                // handle bold
                 if processed_word.contains("**") && !self.code_block_section {
                     self.handle_bold_formatting(&mut processed_word);
                 }
 
+                //  code block formatting
                 if processed_word.contains("```") {
                     self.handle_code_block_formatting(&mut processed_word);
                     self.bold_section = false;
@@ -129,6 +126,7 @@ impl PromptFormatter {
                 // handle comment flags
                 self.handle_comment_flags(&mut current_line, &mut processed_word);
 
+                // syntax highlighting when in a code block but not in a comment
                 if self.code_block_section
                     && !self.single_line_comment_section
                     && !self.multi_line_comment_section
@@ -139,15 +137,19 @@ impl PromptFormatter {
                 current_line.push_str(&processed_word);
             }
 
-            if !current_line.trim().is_empty() {
-                if self.code_block_section {
-                    self.pad_code_block_line(&mut current_line, unformatted_line.len())
-                }
-                formatted_prompt.push(current_line);
-            }
+            self.add_formatted_line(&mut formatted_prompt, unformatted_line.len(), current_line);
         }
 
         formatted_prompt
+    }
+
+    fn add_formatted_line(&mut self, formatted_prompt: &mut Vec<String>, unformatted_line_len : usize, mut current_line: String) {
+        if !current_line.trim().is_empty() {
+            if self.code_block_section {
+                self.pad_code_block_line(&mut current_line, unformatted_line_len)
+            }
+            formatted_prompt.push(current_line);
+        }
     }
 
     fn handle_code_block_line_wrap(
@@ -168,6 +170,8 @@ impl PromptFormatter {
                 current_line.push_str(QUOTED_CODE_BLOCK_TEXT_COLOR_ESC);
             }
 
+            // Indent 4 char "tab"
+            // todo should this actually be a tab instead of spaces?
             current_line.push_str("    ");
             unformatted_line.push_str("    ");
         }
@@ -251,6 +255,7 @@ impl PromptFormatter {
             let mut offset = 0;
 
             for (i, c) in processed_word.chars().enumerate() {
+                // handle quote syntax highlighting if a quote character, but not an escaped one
                 if ((c == '"' && !self.code_block_single_quote_section)
                     || (c == '\'' && !self.code_block_double_quote_section))
                     && (i == 0 || processed_word.chars().nth(i - 1).unwrap() != '\\')
@@ -279,6 +284,7 @@ impl PromptFormatter {
         }
     }
 
+    /// Determine the max width of code blocks based on the length of word wraps
     pub fn determine_max_width(&mut self, text: &str) {
         for paragraph in text.split('\n') {
             if paragraph.trim().is_empty() {
@@ -294,10 +300,11 @@ impl PromptFormatter {
                     current_line.push(' ');
                 }
 
+                // replace chars that are removed during formatting
                 let word = word.replace("**", "").replace("```", "");
                 current_line.push_str(&word);
 
-                // 2 is for space between string and word and 1 pad char at the end
+                // 2 is for space between string and word and 1 pad char at the end of the line
                 let next_word_str_len = current_line.len() + word.len() + 2;
                 let mut one_word_str_len = indent.len() + word.len() + 2;
                 if current_line.contains(" ") {
@@ -306,10 +313,12 @@ impl PromptFormatter {
 
                 // todo handle wrapping strings with " + "
 
+                // if indent + word > current width but < MAX_WIDTH increase width
                 if one_word_str_len > self.code_block_width && one_word_str_len < MAX_WIDTH {
                     self.code_block_width = one_word_str_len;
                     current_line = indent.to_owned();
                 } else if one_word_str_len >= MAX_WIDTH {
+                    // if indent + word >= max width use max width
                     self.code_block_width = MAX_WIDTH - 1; // 1 space of padding at the end
                     return;
                 } else if next_word_str_len > self.code_block_width {
@@ -322,7 +331,6 @@ impl PromptFormatter {
 
     /// Pad the end of code block lines to the width to maintain a constant appearance
     fn pad_code_block_line(&mut self, formatted_line: &mut String, unformatted_line_len: usize) {
-        //formatted_line.push_str(START_CODE_BLOCK_SECTION_ESC);
         if unformatted_line_len < self.code_block_width {
             formatted_line.push_str(&" ".repeat(self.code_block_width - unformatted_line_len));
         }
