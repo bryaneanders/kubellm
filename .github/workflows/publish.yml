@@ -1,0 +1,235 @@
+name: Publish Artifacts
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        target: 
+          - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - aarch64-apple-darwin
+          - x86_64-pc-windows-gnu
+        
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Cache cargo registry
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+        key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-registry-
+    
+    - name: Cache target directory
+      uses: actions/cache@v4
+      with:
+        path: target
+        key: ${{ runner.os }}-${{ matrix.target }}-target-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.target }}-target-
+    
+    - name: Install Rust
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        targets: ${{ matrix.target }}
+    
+    - name: Install cross-compilation tools
+      run: |
+        case "${{ matrix.target }}" in
+          x86_64-pc-windows-gnu)
+            sudo apt-get update
+            sudo apt-get install -y gcc-mingw-w64-x86-64
+            ;;
+          aarch64-apple-darwin|x86_64-apple-darwin)
+            # macOS targets require additional setup on Linux
+            if [ "$RUNNER_OS" = "Linux" ]; then
+              echo "Cross-compilation for Apple targets requires macOS runner"
+              exit 1
+            fi
+            ;;
+        esac
+    
+    - name: Build CLI
+      run: cargo build --release --target ${{ matrix.target }} --bin prompts-cli
+    
+    - name: Build API
+      run: cargo build --release --target ${{ matrix.target }} --bin prompts-api
+    
+    - name: Build WebApp
+      run: cargo build --release --target ${{ matrix.target }} --bin prompts-webapp
+    
+    - name: Create artifact directory
+      run: mkdir -p artifacts
+    
+    - name: Copy binaries and add extensions
+      run: |
+        if [[ "${{ matrix.target }}" == *"windows"* ]]; then
+          cp target/${{ matrix.target }}/release/prompts-cli.exe artifacts/prompts-cli-${{ matrix.target }}.exe
+          cp target/${{ matrix.target }}/release/prompts-api.exe artifacts/prompts-api-${{ matrix.target }}.exe
+          cp target/${{ matrix.target }}/release/prompts-webapp.exe artifacts/prompts-webapp-${{ matrix.target }}.exe
+        else
+          cp target/${{ matrix.target }}/release/prompts-cli artifacts/prompts-cli-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/prompts-api artifacts/prompts-api-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/prompts-webapp artifacts/prompts-webapp-${{ matrix.target }}
+        fi
+    
+    - name: Create checksums
+      run: |
+        cd artifacts
+        for file in *; do
+          sha256sum "$file" > "$file.sha256"
+        done
+    
+    - name: Upload Release Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kubellm-release-${{ matrix.target }}
+        path: artifacts/
+        retention-days: 90
+
+  create-release:
+    runs-on: ubuntu-latest
+    needs: publish
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: release-artifacts
+    
+    - name: Generate version
+      id: version
+      run: |
+        # Use date-based versioning for automated releases
+        VERSION="v$(date +'%Y.%m.%d')-$(git rev-parse --short HEAD)"
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Generated version: $VERSION"
+    
+    - name: Prepare release assets
+      run: |
+        mkdir -p release-assets
+        find release-artifacts -name "prompts-*" -type f | while read file; do
+          cp "$file" release-assets/
+        done
+        ls -la release-assets/
+    
+    - name: Create Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.version }}
+        name: Release ${{ steps.version.outputs.version }}
+        body: |
+          🚀 **Automated Release from Main Branch**
+          
+          This release contains pre-built binaries for:
+          - **CLI Tool** (`prompts-cli`)
+          - **API Server** (`prompts-api`) 
+          - **Web Application** (`prompts-webapp`)
+          
+          ### Supported Platforms:
+          - Linux (x86_64)
+          - macOS (x86_64 Intel)
+          - macOS (ARM64 Apple Silicon)
+          - Windows (x86_64)
+          
+          ### Installation:
+          1. Download the appropriate binary for your platform
+          2. Make it executable: `chmod +x prompts-cli-<target>`
+          3. Move to your PATH: `mv prompts-cli-<target> /usr/local/bin/prompts-cli`
+          
+          ### Verification:
+          Each binary includes a `.sha256` file for integrity verification:
+          ```bash
+          sha256sum -c prompts-cli-<target>.sha256
+          ```
+          
+          **Commit**: ${{ github.sha }}
+        files: release-assets/*
+        draft: false
+        prerelease: false
+        generate_release_notes: true
+        make_latest: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  #docker-publish:
+  #  runs-on: ubuntu-latest
+  #  needs: publish
+  #  if: github.ref == 'refs/heads/main'
+  #
+  #  steps:
+  #  - uses: actions/checkout@v4
+  #
+  #  - name: Set up Docker Buildx
+  #    uses: docker/setup-buildx-action@v3
+  #
+  #  - name: Log in to GitHub Container Registry
+  #    uses: docker/login-action@v3
+  #    with:
+  #      registry: ghcr.io
+  #      username: ${{ github.actor }}
+  #      password: ${{ secrets.GITHUB_TOKEN }}
+  #
+  #  - name: Extract metadata
+  #    id: meta
+  #    uses: docker/metadata-action@v5
+  #    with:
+  #      images: |
+  #        ghcr.io/${{ github.repository_owner }}/kubellm-api
+  #        ghcr.io/${{ github.repository_owner }}/kubellm-cli
+  #        ghcr.io/${{ github.repository_owner }}/kubellm-webapp
+  #      tags: |
+  #        type=ref,event=branch
+  #        type=sha,prefix={{branch}}-
+  #        type=raw,value=latest,enable={{is_default_branch}}
+  #
+  #  - name: Build and push API Docker image
+  #    uses: docker/build-push-action@v5
+  #    with:
+  #      context: .
+  #      file: ./Dockerfile-api
+  #      push: true
+  #      tags: ghcr.io/${{ github.repository_owner }}/kubellm-api:latest,ghcr.io/${{ github.repository_owner }}/kubellm-api:${{ github.sha }}
+  #      platforms: linux/amd64,linux/arm64
+  #      cache-from: type=gha
+  #      cache-to: type=gha,mode=max
+  #
+  #  - name: Build and push CLI Docker image
+  #    uses: docker/build-push-action@v5
+  #    with:
+  #      context: .
+  #      file: ./Dockerfile-cli
+  #      push: true
+  #      tags: ghcr.io/${{ github.repository_owner }}/kubellm-cli:latest,ghcr.io/${{ github.repository_owner }}/kubellm-cli:${{ github.sha }}
+  #      platforms: linux/amd64,linux/arm64
+  #      cache-from: type=gha
+  #      cache-to: type=gha,mode=max
+  #
+  #  - name: Build and push WebApp Docker image
+  #    uses: docker/build-push-action@v5
+  #    with:
+  #      context: .
+  #      file: ./Dockerfile-webapp
+  #      push: true
+  #      tags: ghcr.io/${{ github.repository_owner }}/kubellm-webapp:latest,ghcr.io/${{ github.repository_owner }}/kubellm-webapp:${{ github.sha }}
+  #      platforms: linux/amd64,linux/arm64
+  #      cache-from: type=gha
+  #      cache-to: type=gha,mode=max
