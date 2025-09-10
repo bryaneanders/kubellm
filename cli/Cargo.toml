@@ -16,6 +16,7 @@ clap = { version = "4.0", features = ["derive"] }
 tokio = { version = "1.0", features = ["full"] }
 # error handling
 anyhow = "1.0"
-ctrlc = "3.0"
 rustyline = "17.0.1"
 dirs = "6.0.0"
+lazy_static = "1.4"
+linked-hash-map = "0.5"

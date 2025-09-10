@@ -6,6 +6,7 @@ use kubellm_core::{
     create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
     Provider,
 };
+use prompts_cli::PromptFormatter;
 use rustyline::error::ReadlineError;
 use rustyline::DefaultEditor;
 use std::fs::File;
@@ -395,7 +396,6 @@ fn crate_rustyline_background_loop(
 
                                 // Clear the current line and show message
                                 println!("\r\x1b[2K\x1b[1APress Ctrl+C again within 2 seconds to force exit...");
-                                io::stdout().flush().unwrap();
                             }
                         }
                     }
@@ -518,6 +518,7 @@ async fn execute_command(
                     if prompts.is_empty() {
                         println!("\r\x1b[2KNo prompts found");
                     } else {
+                        let mut prompt_formatter = PromptFormatter::new();
                         println!("\r\x1b[2KFound {} prompts:", prompts.len());
                         for prompt in prompts {
                             println!(
@@ -525,13 +526,13 @@ async fn execute_command(
                                 prompt.id
                             );
                             println!("  │ Prompt:");
-                            let wrapped_prompt = wrap_text_preserving_newlines(&prompt.prompt, 80);
+                            let wrapped_prompt = prompt_formatter.format_prompt(&prompt.prompt, 80);
                             for line in wrapped_prompt {
                                 println!("  │     {}", line);
                             }
                             println!("  │ Response: ");
                             let wrapped_response =
-                                wrap_text_preserving_newlines(&prompt.response, 60);
+                                prompt_formatter.format_prompt(&prompt.response, 80);
                             for line in wrapped_response {
                                 println!("  │     {}", line);
                             }
@@ -565,8 +566,13 @@ async fn execute_command(
                 ctrl_c_state
             ) {
                 Ok(response) => {
+                    let mut prompt_formatter = PromptFormatter::new();
                     println!("\r\x1b[2K✅ Response:");
-                    println!("{}", response.response);
+                    let wrapped_response =
+                        prompt_formatter.format_prompt(response.response.as_str(), 80);
+                    for line in wrapped_response {
+                        println!("  │     {}", line);
+                    }
                     println!("Prompt ID: {}", response.id);
                 }
                 Err(e) => {
@@ -682,43 +688,6 @@ fn parse_quoted_args(input: &str) -> Vec<String> {
     }
 
     args
-}
-
-fn wrap_text_preserving_newlines(text: &str, width: usize) -> Vec<String> {
-    let mut result = Vec::new();
-
-    // Split by existing newlines first
-    for paragraph in text.split('\n') {
-        if paragraph.trim().is_empty() {
-            result.push(String::new()); // Preserve empty lines
-            continue;
-        }
-        // todo handle bold text and code blocks
-
-        let indent_prefix = if paragraph.starts_with("-") { " " } else { "" };
-
-        // Then wrap each paragraph
-        let mut current_line = String::new();
-        for word in paragraph.split_whitespace() {
-            if current_line.len() + word.len() + 1 > width && !current_line.is_empty() {
-                result.push(current_line);
-                current_line = String::new();
-                current_line.push_str(indent_prefix);
-            }
-
-            if !current_line.is_empty() {
-                current_line.push(' ');
-            }
-
-            current_line.push_str(word);
-        }
-
-        if !current_line.is_empty() {
-            result.push(current_line);
-        }
-    }
-
-    result
 }
 
 fn show_help() {
