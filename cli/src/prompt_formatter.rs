@@ -68,15 +68,21 @@ impl PromptFormatter {
             // get the level of indent to preserve for code blocks.
             let indent_prefix = if paragraph.starts_with("-") { " " } else { "" };
             let leading_whitespace = paragraph.len() - paragraph.trim_start().len();
-            let unformatted_indent = paragraph[..leading_whitespace].to_string();
-            let mut indent = unformatted_indent.clone();
-            if self.code_block_section {
-                indent.insert_str(0, START_CODE_BLOCK_SECTION_ESC);
-            }
+            let unformatted_indent = &paragraph[..leading_whitespace];
 
-            let mut current_line = indent.to_owned();
+            let mut indent = String::with_capacity(
+                unformatted_indent.len() + START_CODE_BLOCK_SECTION_ESC.len(),
+            );
+            if self.code_block_section {
+                indent.push_str(START_CODE_BLOCK_SECTION_ESC);
+            }
+            indent.push_str(unformatted_indent);
+
+            let mut current_line = String::with_capacity(self.width);
+            current_line.push_str(&indent);
             // need this so that escape characters don't count towards the length of the line
-            let mut unformatted_line = unformatted_indent.to_owned();
+            let mut unformatted_line = String::with_capacity(self.width);
+            unformatted_line.push_str(unformatted_indent);
 
             self.single_line_comment_section = false;
             for word in paragraph.split_whitespace() {
@@ -104,19 +110,20 @@ impl PromptFormatter {
                     self.add_formatted_line(unformatted_line.len(), current_line);
 
                     // start new lines with the same level of indent
-                    current_line = indent.to_owned();
-                    unformatted_line = unformatted_indent.to_owned();
+                    current_line = String::with_capacity(width_to_use);
+                    current_line.push_str(&indent);
+                    unformatted_line = String::with_capacity(width_to_use);
+                    unformatted_line.push_str(unformatted_indent);
 
                     self.handle_code_block_line_wrap(&mut current_line, &mut unformatted_line);
                     current_line.push_str(indent_prefix);
 
                     if self.code_block_single_quote_section || self.code_block_double_quote_section
                     {
-                        let quote_prefix = START_CODE_BLOCK_SECTION_ESC.to_string()
-                            + "+"
-                            + QUOTED_CODE_BLOCK_TEXT_COLOR_ESC
-                            + " \"";
-                        current_line.push_str(quote_prefix.as_str());
+                        current_line.push_str(START_CODE_BLOCK_SECTION_ESC);
+                        current_line.push('+');
+                        current_line.push_str(QUOTED_CODE_BLOCK_TEXT_COLOR_ESC);
+                        current_line.push_str(" \"");
                         unformatted_line.push_str("+ \"");
                     }
                 }
@@ -139,8 +146,8 @@ impl PromptFormatter {
                     self.bold_section = false;
                     processed_word.insert_str(processed_word.len(), NON_BOLD_TEXT_ESC);
                     if self.code_block_section {
-                        current_line = "".to_owned();
-                        unformatted_line = "".to_owned();
+                        current_line.clear();
+                        unformatted_line.clear();
                         //self.formatted_prompt.push("\x1b[1A".to_owned());
                         break;
                     }
@@ -281,11 +288,14 @@ impl PromptFormatter {
 
     /// Handles text color changes for different quote syntax highlighting situations
     fn handle_quote_formatting(&mut self, processed_word: &mut String, finding_width: bool) {
-        let mut edited_word: String = processed_word.to_owned();
-        if processed_word.contains("\"") || processed_word.contains("'") {
-            let mut offset = 0;
+        if !(processed_word.contains("\"") || processed_word.contains("'")) {
+            return;
+        }
+
+        // Only allocate if we need to modify the string for formatting
+        if finding_width {
+            // When finding width, we only need to update state, no string modifications
             for (i, c) in processed_word.chars().enumerate() {
-                // handle quote syntax highlighting if a quote character, but not an escaped one
                 if ((c == '"' && !self.code_block_single_quote_section)
                     || (c == '\'' && !self.code_block_double_quote_section))
                     && (i == 0 || processed_word.chars().nth(i - 1).unwrap() != '\\')
@@ -297,29 +307,49 @@ impl PromptFormatter {
                         } else {
                             self.code_block_double_quote_section = false;
                         }
-
-                        if !finding_width {
-                            edited_word
-                                .insert_str(i + offset + 1, STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
-                            offset += STANDARD_CODE_BLOCK_TEXT_COLOR_ESC.len();
-                        }
+                    } else if c == '\'' {
+                        self.code_block_single_quote_section = true;
                     } else {
-                        if c == '\'' {
-                            self.code_block_single_quote_section = true;
-                        } else {
-                            self.code_block_double_quote_section = true;
-                        }
-
-                        if !finding_width {
-                            edited_word.insert_str(i + offset, QUOTED_CODE_BLOCK_TEXT_COLOR_ESC);
-                            offset += QUOTED_CODE_BLOCK_TEXT_COLOR_ESC.len();
-                        }
+                        self.code_block_double_quote_section = true;
                     }
                 }
             }
+            return;
         }
 
-        *processed_word = edited_word;
+        // For formatting, we need to modify the string - build it efficiently
+        let original_chars: Vec<char> = processed_word.chars().collect();
+        let mut result = String::with_capacity(processed_word.len() + 50); // estimate extra space for escape codes
+
+        for (i, &c) in original_chars.iter().enumerate() {
+            // handle quote syntax highlighting if a quote character, but not an escaped one
+            if ((c == '"' && !self.code_block_single_quote_section)
+                || (c == '\'' && !self.code_block_double_quote_section))
+                && (i == 0 || original_chars[i - 1] != '\\')
+            {
+                if self.code_block_single_quote_section || self.code_block_double_quote_section {
+                    if c == '\'' {
+                        self.code_block_single_quote_section = false;
+                    } else {
+                        self.code_block_double_quote_section = false;
+                    }
+                    result.push(c);
+                    result.push_str(STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
+                } else {
+                    if c == '\'' {
+                        self.code_block_single_quote_section = true;
+                    } else {
+                        self.code_block_double_quote_section = true;
+                    }
+                    result.push_str(QUOTED_CODE_BLOCK_TEXT_COLOR_ESC);
+                    result.push(c);
+                }
+            } else {
+                result.push(c);
+            }
+        }
+
+        *processed_word = result;
     }
 
     /// Determine the max width of code blocks based on the length of word wraps
@@ -330,8 +360,9 @@ impl PromptFormatter {
             }
 
             let leading_whitespace = paragraph.len() - paragraph.trim_start().len();
-            let indent = paragraph[..leading_whitespace].to_string();
-            let mut current_line = indent.clone();
+            let indent = &paragraph[..leading_whitespace];
+            let mut current_line = String::with_capacity(self.width);
+            current_line.push_str(indent);
 
             for word in paragraph.split_whitespace() {
                 if !current_line.is_empty() {
@@ -349,7 +380,7 @@ impl PromptFormatter {
                     one_word_str_len += 4; // extra indent
                 }
 
-                let mut word = word.to_owned();
+                let mut word = word.to_string();
                 self.handle_quote_formatting(&mut word, true);
                 if self.code_block_single_quote_section || self.code_block_double_quote_section {
                     one_word_str_len += 1; // end quotes
@@ -358,13 +389,15 @@ impl PromptFormatter {
                 // if indent + word > current width but < MAX_WIDTH increase width
                 if one_word_str_len > self.code_block_width && one_word_str_len < MAX_WIDTH {
                     self.code_block_width = one_word_str_len;
-                    current_line = indent.to_owned();
+                    current_line.clear();
+                    current_line.push_str(indent);
                 } else if one_word_str_len >= MAX_WIDTH {
                     // if indent + word >= max width use max width
                     self.code_block_width = MAX_WIDTH - 1; // 1 space of padding at the end
                     return;
                 } else if next_word_str_len > self.code_block_width {
-                    current_line = indent.to_owned();
+                    current_line.clear();
+                    current_line.push_str(indent);
                     continue;
                 }
             }
