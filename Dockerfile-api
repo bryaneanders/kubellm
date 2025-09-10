@@ -11,11 +11,11 @@ RUN apt-get update && apt-get install -y \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-# Set environment variables
+# Set environment variables for OpenSSL
 ENV OPENSSL_DIR=/usr
 ENV OPENSSL_LIB_DIR=/usr/lib/x86_64-linux-gnu
 ENV OPENSSL_INCLUDE_DIR=/usr/include/openssl
-ENV PKG_CONFIG_PATH=/usr/lib/x86_64-linux-gnu/pkgconfig
+ENV PKG_CONFIG_ALLOW_CROSS=1
 
 RUN mkdir api cli
 
