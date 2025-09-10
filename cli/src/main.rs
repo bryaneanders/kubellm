@@ -566,8 +566,13 @@ async fn execute_command(
                 ctrl_c_state
             ) {
                 Ok(response) => {
+                    let mut prompt_formatter = PromptFormatter::new();
                     println!("\r\x1b[2K✅ Response:");
-                    println!("{}", response.response);
+                    let wrapped_response =
+                        prompt_formatter.format_prompt(response.response.as_str(), 80);
+                    for line in wrapped_response {
+                        println!("  │     {}", line);
+                    }
                     println!("Prompt ID: {}", response.id);
                 }
                 Err(e) => {
