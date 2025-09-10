@@ -94,12 +94,12 @@ impl PromptFormatter {
                 }
 
                 // wrap the line if the next word will make the line longer than the width
-                if line_len > width_to_use && !unformatted_line.is_empty()
-                {
+                if line_len > width_to_use && !unformatted_line.is_empty() {
                     // add closing quotes to end of line
-                    if self.code_block_single_quote_section || self.code_block_double_quote_section {
-                        current_line.push_str("\"");
-                        unformatted_line.push_str("\"");
+                    if self.code_block_single_quote_section || self.code_block_double_quote_section
+                    {
+                        current_line.push('"');
+                        unformatted_line.push('"');
                     }
                     self.add_formatted_line(unformatted_line.len(), current_line);
 
@@ -110,8 +110,13 @@ impl PromptFormatter {
                     self.handle_code_block_line_wrap(&mut current_line, &mut unformatted_line);
                     current_line.push_str(indent_prefix);
 
-                    if self.code_block_single_quote_section || self.code_block_double_quote_section {
-                        current_line.push_str((START_CODE_BLOCK_SECTION_ESC.to_string() + "+" + QUOTED_CODE_BLOCK_TEXT_COLOR_ESC + " \"").as_str());
+                    if self.code_block_single_quote_section || self.code_block_double_quote_section
+                    {
+                        let quote_prefix = START_CODE_BLOCK_SECTION_ESC.to_string()
+                            + "+"
+                            + QUOTED_CODE_BLOCK_TEXT_COLOR_ESC
+                            + " \"";
+                        current_line.push_str(quote_prefix.as_str());
                         unformatted_line.push_str("+ \"");
                     }
                 }
@@ -247,9 +252,6 @@ impl PromptFormatter {
             self.code_block_section = true;
             self.first_code_block_line = true;
             self.language = processed_word.replace("```", "").replace("[.*", "");
-            //*processed_word = format!("\x1b[1A\x1b[2K{}", START_CODE_BLOCK_SECTION_ESC);
-            //*processed_word = format!("\x1b[2K{}", START_CODE_BLOCK_SECTION_ESC);
-            //*processed_word = format!("\x1b[1A");
         } else {
             self.code_block_section = false;
             self.language = "".to_owned();
@@ -274,12 +276,12 @@ impl PromptFormatter {
             }
         }
 
-      self.handle_quote_formatting(processed_word, false);
+        self.handle_quote_formatting(processed_word, false);
     }
 
     /// Handles text color changes for different quote syntax highlighting situations
     fn handle_quote_formatting(&mut self, processed_word: &mut String, finding_width: bool) {
-        let mut edited_word : String = processed_word.to_owned();
+        let mut edited_word: String = processed_word.to_owned();
         if processed_word.contains("\"") || processed_word.contains("'") {
             let mut offset = 0;
             for (i, c) in processed_word.chars().enumerate() {
@@ -296,8 +298,9 @@ impl PromptFormatter {
                             self.code_block_double_quote_section = false;
                         }
 
-                        if finding_width == false {
-                            edited_word.insert_str(i + offset + 1, STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
+                        if !finding_width {
+                            edited_word
+                                .insert_str(i + offset + 1, STANDARD_CODE_BLOCK_TEXT_COLOR_ESC);
                             offset += STANDARD_CODE_BLOCK_TEXT_COLOR_ESC.len();
                         }
                     } else {
@@ -307,7 +310,7 @@ impl PromptFormatter {
                             self.code_block_double_quote_section = true;
                         }
 
-                        if finding_width == false {
+                        if !finding_width {
                             edited_word.insert_str(i + offset, QUOTED_CODE_BLOCK_TEXT_COLOR_ESC);
                             offset += QUOTED_CODE_BLOCK_TEXT_COLOR_ESC.len();
                         }
@@ -318,7 +321,6 @@ impl PromptFormatter {
 
         *processed_word = edited_word;
     }
-
 
     /// Determine the max width of code blocks based on the length of word wraps
     pub fn determine_max_width(&mut self, text: &str) {
