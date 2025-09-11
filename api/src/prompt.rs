@@ -75,7 +75,8 @@ pub async fn get_models_handler(
     }
 }
 
-pub async fn get_providers_handler() -> anyhow::Result<Json<Vec<String>>, (StatusCode, Json<ErrorResponse>)> {
+pub async fn get_providers_handler(
+) -> anyhow::Result<Json<Vec<String>>, (StatusCode, Json<ErrorResponse>)> {
     let providers = Provider::all();
     let provider_strings: Vec<String> = providers.iter().map(|p| p.to_string()).collect();
     Ok(Json(provider_strings))
