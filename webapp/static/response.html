@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prompt Response - Prompt Saver</title>
+    <!-- Prism.js CSS for syntax highlighting -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism.min.css" rel="stylesheet" />
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        h1 {
+            color: #333;
+            font-weight: 600;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .nav-link {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-weight: 500;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            font-size: 14px;
+        }
+
+        .nav-link:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .loading {
+            text-align: center;
+            color: #666;
+            padding: 3rem;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-right: 10px;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            text-align: center;
+        }
+
+        .response-container {
+            display: none;
+        }
+
+        .prompt-info {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .prompt-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .prompt-id {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 6px 16px;
+            border-radius: 16px;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .prompt-date {
+            color: #666;
+            font-size: 0.9rem;
+        }
+
+        .prompt-content {
+            color: #2d3748;
+            line-height: 1.7;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            background: white;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 1px solid #dee2e6;
+            font-size: 0.95rem;
+            font-weight: 400;
+        }
+
+        .prompt-metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        .metadata-tag {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.85rem;
+            font-weight: 500;
+        }
+
+        .metadata-tag.provider {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .metadata-tag.model {
+            background: #28a745;
+            color: white;
+        }
+
+        .response-section {
+            margin-top: 2rem;
+        }
+
+        .response-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 12px 12px 0 0;
+            font-weight: 600;
+            font-size: 1.1rem;
+        }
+
+        .response-content {
+            background: #ffffff;
+            border: 1px solid #28a745;
+            border-top: none;
+            border-radius: 0 0 12px 12px;
+            padding: 1.5rem;
+            color: #1a202c;
+            line-height: 1.8;
+            word-wrap: break-word;
+            white-space: pre-wrap;
+            font-size: 1rem;
+            font-weight: 400;
+        }
+
+        /* Custom styles for code blocks */
+        .response-content pre {
+            background: #1e293b !important;
+            border-radius: 8px;
+            margin: 0.5rem 0;
+            overflow-x: auto;
+            border: 1px solid #334155;
+        }
+
+        .response-content pre code {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+            font-size: 0.9rem;
+            color: #e2e8f0 !important;
+            text-shadow: none !important;
+            font-weight: 400 !important;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* Remove background colors from operators and punctuation in code blocks */
+        .response-content pre code .token.operator,
+        .response-content pre code .token.punctuation,
+        .response-content pre code .token.symbol {
+            background: transparent !important;
+            background-color: transparent !important;
+        }
+
+        .response-content code {
+            font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', 'Source Code Pro', monospace;
+            font-size: 0.9rem;
+        }
+
+        .response-content p code {
+            background: #f1f5f9;
+            color: #1e293b;
+            padding: 3px 6px;
+            border-radius: 4px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            border: 1px solid #e2e8f0;
+        }
+
+        /* Markdown formatting styles */
+        .response-content h1 {
+            color: #1a202c;
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 1.5rem 0 1rem 0;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 0.5rem;
+        }
+
+        .response-content h2 {
+            color: #2d3748;
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin: 1.25rem 0 0.75rem 0;
+        }
+
+        .response-content h3 {
+            color: #4a5568;
+            font-size: 1.1rem;
+            font-weight: 600;
+            margin: 1rem 0 0.5rem 0;
+        }
+
+        .response-content strong {
+            font-weight: 600;
+            color: #1a202c;
+        }
+
+        .response-content em {
+            font-style: italic;
+            color: #2d3748;
+        }
+
+        .response-content ul, .response-content ol {
+            margin: 1rem 0;
+            padding-left: 1.5rem;
+        }
+
+        .response-content li {
+            margin: 0.25rem 0;
+            line-height: 1.6;
+        }
+
+        .response-content ul li {
+            list-style-type: disc;
+        }
+
+        .response-content ol li {
+            list-style-type: decimal;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        @media (max-width: 600px) {
+            .header {
+                flex-direction: column;
+                text-align: center;
+            }
+
+            .container {
+                padding: 1rem;
+            }
+
+            .prompt-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .nav-links {
+                justify-content: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>💬 Prompt Response</h1>
+            <div class="nav-links">
+                <a href="/" class="nav-link">✏️ Create Prompt</a>
+                <a href="/prompts" class="nav-link">📋 All Prompts</a>
+            </div>
+        </div>
+        
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            Loading prompt and response...
+        </div>
+        
+        <div id="error" class="error" style="display: none;"></div>
+        
+        <div id="responseContainer" class="response-container">
+            <div class="prompt-info">
+                <div class="prompt-header">
+                    <span id="promptId" class="prompt-id"></span>
+                    <span id="promptDate" class="prompt-date"></span>
+                </div>
+                <div id="promptContent" class="prompt-content"></div>
+                <div class="prompt-metadata">
+                    <span id="providerTag" class="metadata-tag provider"></span>
+                    <span id="modelTag" class="metadata-tag model"></span>
+                </div>
+            </div>
+            
+            <div class="response-section">
+                <div class="response-header">
+                    🤖 AI Response
+                </div>
+                <div id="responseContent" class="response-content"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function loadPromptResponse() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const promptId = urlParams.get('id');
+            
+            if (!promptId) {
+                showError('No prompt ID provided in URL');
+                return;
+            }
+
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const responseContainer = document.getElementById('responseContainer');
+
+            try {
+                const response = await fetch(`http://localhost:3001/prompts`);
+                
+                if (!response.ok) {
+                    throw new Error(`Failed to load prompts: ${response.status}`);
+                }
+
+                const prompts = await response.json();
+                const prompt = prompts.find(p => p.id.toString() === promptId);
+                
+                if (!prompt) {
+                    throw new Error(`Prompt with ID ${promptId} not found`);
+                }
+                
+                loading.style.display = 'none';
+                responseContainer.style.display = 'block';
+                
+                displayPromptResponse(prompt);
+
+            } catch (err) {
+                loading.style.display = 'none';
+                showError(`Error loading prompt: ${err.message}`);
+                console.error('Error loading prompt:', err);
+            }
+        }
+
+        function processCodeBlocks(text) {
+            // Step 1: Process fenced code blocks first (and handle trailing newlines)
+            text = text.replace(/```(\w+)?\n([\s\S]*?)```\n?/g, (match, language, code) => {
+                const lang = language || 'text';
+                const escapedCode = escapeHtml(code);
+                return `<pre><code class="language-${lang}">${escapedCode}</code></pre>`;
+            });
+
+            // Step 2: Process inline code
+            text = text.replace(/`([^`\n]+)`/g, (match, code) => {
+                return `<code>${escapeHtml(code)}</code>`;
+            });
+
+            // Step 3: Process markdown formatting with simpler approach
+            text = processSimpleMarkdown(text);
+
+            // Step 4: Convert remaining newlines to <br> tags (but not inside <pre> blocks)
+            const parts = text.split(/(<pre>[\s\S]*?<\/pre>)/);
+            for (let i = 0; i < parts.length; i++) {
+                if (!parts[i].startsWith('<pre>')) {
+                    // Just convert newlines to <br> for now
+                    parts[i] = parts[i].replace(/\n/g, '<br>');
+                }
+            }
+            text = parts.join('');
+            
+            // Step 5: Clean up any <br> tags that come right after headers
+            text = text.replace(/(<\/h[1-6]>)<br>/g, '$1');
+            
+            return text;
+        }
+
+        function processSimpleMarkdown(text) {
+            // Only process markdown outside of HTML tags (simple version)
+            const parts = text.split(/(<pre>[\s\S]*?<\/pre>|<code>[\s\S]*?<\/code>)/);
+            
+            for (let i = 0; i < parts.length; i++) {
+                // Skip HTML tags
+                if (parts[i].startsWith('<pre>') || parts[i].startsWith('<code>')) {
+                    continue;
+                }
+                
+                let part = parts[i];
+                
+                // Process headers - consume surrounding newlines to avoid extra breaks
+                part = part.replace(/\n*^### (.+)$\n*/gm, '\n<h3>$1</h3>\n');
+                part = part.replace(/\n*^## (.+)$\n*/gm, '\n<h2>$1</h2>\n');
+                part = part.replace(/\n*^# (.+)$\n*/gm, '\n<h1>$1</h1>\n');
+                
+                // Process bold text
+                part = part.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+                
+                parts[i] = part;
+            }
+            
+            return parts.join('');
+        }
+
+
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function displayPromptResponse(prompt) {
+            const promptId = document.getElementById('promptId');
+            const promptDate = document.getElementById('promptDate');
+            const promptContent = document.getElementById('promptContent');
+            const providerTag = document.getElementById('providerTag');
+            const modelTag = document.getElementById('modelTag');
+            const responseContent = document.getElementById('responseContent');
+
+            const date = new Date(prompt.created_at);
+            const formattedDate = date.toLocaleString();
+
+            promptId.textContent = `ID: ${prompt.id}`;
+            promptDate.textContent = formattedDate;
+            promptContent.textContent = prompt.prompt;
+            providerTag.textContent = `📡 ${prompt.provider}`;
+            modelTag.textContent = `🤖 ${prompt.model}`;
+            
+            // Process response text for code blocks and set as HTML
+            const processedResponse = processCodeBlocks(prompt.response);
+            responseContent.innerHTML = processedResponse;
+            
+            // Trigger Prism syntax highlighting
+            if (typeof Prism !== 'undefined') {
+                Prism.highlightAllUnder(responseContent);
+            }
+        }
+
+        function showError(message) {
+            const error = document.getElementById('error');
+            error.style.display = 'block';
+            error.textContent = `❌ ${message}`;
+        }
+
+        // Load prompt response when the page loads
+        window.addEventListener('DOMContentLoaded', loadPromptResponse);
+    </script>
+    
+    <!-- Prism.js JavaScript for syntax highlighting -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+</body>
+</html>

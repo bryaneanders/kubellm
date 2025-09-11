@@ -19,6 +19,10 @@ async fn serve_prompts() -> Html<&'static str> {
     Html(include_str!("../static/prompts.html"))
 }
 
+async fn serve_response() -> Html<&'static str> {
+    Html(include_str!("../static/response.html"))
+}
+
 async fn health_check() -> &'static str {
     "Web app is running!"
 }
@@ -46,6 +50,7 @@ async fn main() -> Result<()> {
     let app = Router::new()
         .route("/", get(serve_index)) // serve html content
         .route("/prompts", get(serve_prompts)) // serve html content
+        .route("/response", get(serve_response)) // serve html content
         .route("/health", get(health_check)) // rest endpoint
         .nest_service("/static", ServeDir::new("static"))
         .layer(CorsLayer::permissive()) // this is a bad idea for prod
