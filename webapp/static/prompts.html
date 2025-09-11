@@ -105,6 +105,7 @@
             padding: 1.5rem;
             margin-bottom: 1rem;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
+            cursor: pointer;
         }
 
         .prompt-card:hover {
@@ -140,6 +141,33 @@
             line-height: 1.6;
             word-wrap: break-word;
             white-space: pre-wrap;
+            margin-bottom: 0.75rem;
+        }
+
+        .prompt-metadata {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .metadata-tag {
+            background: #e9ecef;
+            color: #495057;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8rem;
+            font-weight: 500;
+        }
+
+        .metadata-tag.provider {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .metadata-tag.model {
+            background: #28a745;
+            color: white;
         }
 
         @keyframes spin {
@@ -238,7 +266,16 @@
                         <span class="prompt-date">${formattedDate}</span>
                     </div>
                     <div class="prompt-content">${escapeHtml(prompt.prompt)}</div>
+                    <div class="prompt-metadata">
+                        <span class="metadata-tag provider">📡 ${prompt.provider}</span>
+                        <span class="metadata-tag model">🤖 ${prompt.model}</span>
+                    </div>
                 `;
+
+                // Add click handler to navigate to response page
+                promptCard.addEventListener('click', () => {
+                    window.location.href = `/response?id=${prompt.id}`;
+                });
 
                 promptsList.appendChild(promptCard);
             });

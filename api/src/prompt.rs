@@ -6,7 +6,7 @@ use std::sync::Arc;
 
 use kubellm_core::{
     get_all_prompts, get_models, prompt_model, CreatePromptRequest, ErrorResponse, GetModelsQuery,
-    Prompt,
+    Prompt, Provider,
 };
 
 // Map Arc<MySqlPool> as the type DatabaseConnection
@@ -73,6 +73,12 @@ pub async fn get_models_handler(
             ))
         }
     }
+}
+
+pub async fn get_providers_handler() -> anyhow::Result<Json<Vec<String>>, (StatusCode, Json<ErrorResponse>)> {
+    let providers = Provider::all();
+    let provider_strings: Vec<String> = providers.iter().map(|p| p.to_string()).collect();
+    Ok(Json(provider_strings))
 }
 
 pub async fn get_prompts_handler(

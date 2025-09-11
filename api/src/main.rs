@@ -1,6 +1,6 @@
 mod prompt;
 
-use crate::prompt::{create_prompt_handler, get_prompts_handler};
+use crate::prompt::{create_prompt_handler, get_prompts_handler, get_providers_handler};
 use anyhow::{Context, Result};
 use axum::{
     routing::{get, post},
@@ -45,6 +45,7 @@ async fn main() -> Result<()> {
         .route("/prompt", post(create_prompt_handler))
         .route("/prompts", get(get_prompts_handler))
         .route("/get-models", get(get_models_handler))
+        .route("/get-providers", get(get_providers_handler))
         .layer(CorsLayer::permissive()) // this is not a good idea for production
         .with_state(db_connection_pool); // set the DatabaseConnection state
 
