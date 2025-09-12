@@ -1,5 +1,5 @@
-use crate::PromptFormatter;
 use crate::config::CliConfig;
+use crate::PromptFormatter;
 use clap::{Parser, Subcommand};
 use kubellm_core::{
     create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
@@ -131,7 +131,7 @@ macro_rules! try_interruptible {
 }
 
 /// Loads the history file from disk
-fn load_history(rl: &mut DefaultEditor ) {
+fn load_history(rl: &mut DefaultEditor) {
     let config = CliConfig::get();
     match config.history_file_path.exists() {
         true => {}
