@@ -221,6 +221,11 @@ jobs:
           - macOS (ARM64 Apple Silicon)
           - Windows (x86_64)
           
+          ### Docker Images:
+          - **API Server**: [`ghcr.io/${{ github.repository_owner }}/kubellm-api:latest`](https://github.com/${{ github.repository_owner }}/kubellm/pkgs/container/kubellm-api)
+          - **CLI Tool**: [`ghcr.io/${{ github.repository_owner }}/kubellm-cli:latest`](https://github.com/${{ github.repository_owner }}/kubellm/pkgs/container/kubellm-cli)
+          - **Web Application**: [`ghcr.io/${{ github.repository_owner }}/kubellm-webapp:latest`](https://github.com/${{ github.repository_owner }}/kubellm/pkgs/container/kubellm-webapp)
+          
           ### Installation:
           1. Download the appropriate binary for your platform
           2. Make it executable: `chmod +x prompts-cli-<target>`
