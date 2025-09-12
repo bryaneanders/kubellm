@@ -1,8 +1,9 @@
-mod config;
-
+use prompts_cli::{
+    crate_rustyline_background_loop, create_ctrlc_background_loop, main_loop, CtrlCState,
+    InputEvent,
+};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use prompts_cli::{crate_rustyline_background_loop, create_ctrlc_background_loop, main_loop, CtrlCState, InputEvent};
 
 #[tokio::main]
 async fn main() {
@@ -10,7 +11,7 @@ async fn main() {
     println!("Type 'help' for available commands or 'exit' to quit.");
     println!("Press Ctrl+C twice quickly to force exit.\n");
 
-    let ctrl_c_state = Arc::new(Mutex::new(CtrlCState::new()));
+    let ctrl_c_state = Arc::new(Mutex::new(CtrlCState::default()));
     let ctrl_c_timeout = Duration::from_secs(2);
 
     // Channel for communication between rustyline and main async task

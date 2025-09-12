@@ -1,15 +1,19 @@
+use crate::PromptFormatter;
+use crate::config::CliConfig;
+use clap::{Parser, Subcommand};
+use kubellm_core::{
+    create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig,
+    Provider,
+};
+use rustyline::error::ReadlineError;
+use rustyline::DefaultEditor;
 use std::fs::File;
 use std::io;
 use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use clap::{Parser, Subcommand};
-use rustyline::DefaultEditor;
-use rustyline::error::ReadlineError;
 use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender};
 use tokio::task::JoinHandle;
-use kubellm_core::{create_database_pool, get_all_prompts, get_models, init_database, prompt_model, CoreConfig, Provider};
-use crate::{CliConfig, PromptFormatter};
 
 #[derive(Debug)]
 pub enum InputEvent {
@@ -34,6 +38,12 @@ impl CtrlCState {
             command_in_progress: false,
             interrupt_command: false,
         }
+    }
+}
+
+impl Default for CtrlCState {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -121,7 +131,7 @@ macro_rules! try_interruptible {
 }
 
 /// Loads the history file from disk
-fn load_history(rl: &mut DefaultEditor) {
+fn load_history(rl: &mut DefaultEditor ) {
     let config = CliConfig::get();
     match config.history_file_path.exists() {
         true => {}
@@ -165,7 +175,10 @@ fn save_history(rl: &mut DefaultEditor) {
 }
 
 /// The main cli parsing loop
-pub async fn main_loop(ctrl_c_state: Arc<Mutex<CtrlCState>>, input_rx: &mut UnboundedReceiver<InputEvent>) {
+pub async fn main_loop(
+    ctrl_c_state: Arc<Mutex<CtrlCState>>,
+    input_rx: &mut UnboundedReceiver<InputEvent>,
+) {
     loop {
         tokio::select! {
             // Handle input from rustyline
@@ -338,7 +351,7 @@ pub fn crate_rustyline_background_loop(
                     let mut state = rusty_ctrl_c_state_clone.lock().unwrap();
                     if state.showing_message {
                         // Clear the message and reset state
-                        print!("\x1b[2K\x1b[1A\x1b[2K\r\x1b[32mprompt-cli>\x1b[97m\x1b[?25h "); // Clear message line and move up
+                        print!("\x1b[2K\x1b[1A\x1b[2K\r\x1b[32mprompt-cli>\x1b[97m\x1b[?25h ");
                         io::stdout().flush().unwrap();
                         state.showing_message = false;
                         state.last_time = None;
@@ -401,7 +414,6 @@ pub fn create_ctrlc_background_loop(
     tokio::spawn(async move {
         let mut interval = tokio::time::interval(Duration::from_millis(100));
         loop {
-
             interval.tick().await;
             let mut state = ctrl_c_state_clone.lock().unwrap();
             if state.showing_message {
@@ -499,16 +511,17 @@ async fn execute_command(
                         let mut prompt_formatter = PromptFormatter::new();
                         println!("\r\x1b[2KFound {} prompts:", prompts.len());
                         for prompt in prompts {
-                            println!(
-                                "  ╭─ [{}] ──────────────────────────────────────────────────────────────────",
-                                prompt.id
-                            );
+                            println!("  ╭─ [{}] ──────────────────────────────────────────────────────────────────", prompt.id);
                             println!("  │ Prompt:");
-                            prompt_formatter.format_prompt(&prompt.prompt, 80)
-                                .into_iter().for_each(|line| println!("  │     {}", line));
+                            prompt_formatter
+                                .format_prompt(&prompt.prompt, 80)
+                                .iter()
+                                .for_each(|line| println!("  │     {}", line));
                             println!("  │ Response: ");
-                            prompt_formatter.format_prompt(&prompt.response, 80)
-                                .into_iter().for_each(|line| println!("  │     {}", line));
+                            prompt_formatter
+                                .format_prompt(&prompt.response, 80)
+                                .iter()
+                                .for_each(|line| println!("  │     {}", line));
                             println!("  │ Model: {}", prompt.model);
                             println!("  │ Provider: {}", prompt.provider);
                             println!("  │ Timestamp: {}", prompt.created_at.timestamp());
@@ -541,8 +554,10 @@ async fn execute_command(
                 Ok(response) => {
                     let mut prompt_formatter = PromptFormatter::new();
                     println!("\r\x1b[2K✅ Response:");
-                    prompt_formatter.format_prompt(response.response.as_str(), 80)
-                        .into_iter().for_each(|line| println!("  │     {}", line));
+                    prompt_formatter
+                        .format_prompt(response.response.as_str(), 80)
+                        .iter()
+                        .for_each(|line| println!("  │     {}", line));
                     println!("Prompt ID: {}", response.id);
                 }
                 Err(e) => {
@@ -559,9 +574,9 @@ async fn execute_command(
                         println!("\r\x1b[2KNo models found for provider '{}'", provider);
                     } else {
                         println!("\r\x1b[2KAvailable models for provider '{}':", provider);
-                        for model in models {
-                            println!(" - {}", model);
-                        }
+                        models
+                            .into_iter()
+                            .for_each(|model| println!(" - {}", model));
                     }
                 }
                 Err(e) => {
