@@ -70,14 +70,23 @@ mod tests {
 
     #[test]
     fn test_provider_from_str() {
-        assert_eq!(Provider::from_str("anthropic").unwrap(), Provider::Anthropic);
-        assert_eq!(Provider::from_str("Anthropic").unwrap(), Provider::Anthropic);
-        assert_eq!(Provider::from_str("ANTHROPIC").unwrap(), Provider::Anthropic);
-        
+        assert_eq!(
+            Provider::from_str("anthropic").unwrap(),
+            Provider::Anthropic
+        );
+        assert_eq!(
+            Provider::from_str("Anthropic").unwrap(),
+            Provider::Anthropic
+        );
+        assert_eq!(
+            Provider::from_str("ANTHROPIC").unwrap(),
+            Provider::Anthropic
+        );
+
         assert_eq!(Provider::from_str("openai").unwrap(), Provider::OpenAI);
         assert_eq!(Provider::from_str("OpenAI").unwrap(), Provider::OpenAI);
         assert_eq!(Provider::from_str("OPENAI").unwrap(), Provider::OpenAI);
-        
+
         assert!(Provider::from_str("invalid").is_err());
         assert!(Provider::from_str("").is_err());
     }

@@ -84,7 +84,7 @@ mod tests {
         // Test that errors are properly wrapped and returned
         let provider_error = Provider::from_str("invalid");
         assert!(provider_error.is_err());
-        
+
         let error_message = provider_error.unwrap_err();
         assert!(error_message.contains("Unknown provider"));
     }
