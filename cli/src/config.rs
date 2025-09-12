@@ -31,3 +31,43 @@ impl CliConfig {
             .unwrap_or_else(|| PathBuf::from(".prompts-cli-history"))
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::env;
+
+    #[test]
+    fn test_get_history_file_path() {
+        let path = CliConfig::get_history_file_path();
+        assert!(path.to_string_lossy().contains(".prompts-cli-history"));
+    }
+
+    #[test]
+    fn test_from_env_with_custom_history_path() {
+        env::set_var("HISTORY_FILE_PATH", "/tmp/test-history");
+        let config = CliConfig::from_env().unwrap();
+        assert_eq!(config.history_file_path, PathBuf::from("/tmp/test-history"));
+        env::remove_var("HISTORY_FILE_PATH");
+    }
+
+    #[test]
+    fn test_from_env_without_custom_history_path() {
+        env::remove_var("HISTORY_FILE_PATH");
+        let config = CliConfig::from_env().unwrap();
+        assert!(config
+            .history_file_path
+            .to_string_lossy()
+            .contains(".prompts-cli-history"));
+    }
+
+    #[test]
+    fn test_config_debug() {
+        let config = CliConfig {
+            history_file_path: PathBuf::from("/test/path"),
+        };
+        let debug_str = format!("{:?}", config);
+        assert!(debug_str.contains("CliConfig"));
+        assert!(debug_str.contains("/test/path"));
+    }
+}

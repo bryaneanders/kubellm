@@ -145,3 +145,125 @@ impl KeywordChecker {
             .collect())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_language_from_string() {
+        assert_eq!(Language::from_string("rust"), Some(Language::Rust));
+        assert_eq!(Language::from_string("rs"), Some(Language::Rust));
+        assert_eq!(Language::from_string("java"), Some(Language::Java));
+        assert_eq!(Language::from_string("bash"), Some(Language::Bash));
+        assert_eq!(Language::from_string("sh"), Some(Language::Bash));
+        assert_eq!(Language::from_string("shell"), Some(Language::Bash));
+        assert_eq!(Language::from_string("unknown"), None);
+    }
+
+    #[test]
+    fn test_language_as_str() {
+        assert_eq!(Language::Rust.as_str(), "rust");
+        assert_eq!(Language::Java.as_str(), "java");
+        assert_eq!(Language::Bash.as_str(), "bash");
+    }
+
+    #[test]
+    fn test_language_debug() {
+        let lang = Language::Rust;
+        assert!(format!("{:?}", lang).contains("Rust"));
+    }
+
+    #[test]
+    fn test_language_equality() {
+        assert_eq!(Language::Rust, Language::Rust);
+        assert_ne!(Language::Rust, Language::Java);
+    }
+
+    #[test]
+    fn test_keyword_checker_is_keyword() {
+        assert!(KeywordChecker::is_keyword("fn", "rust").unwrap());
+        assert!(KeywordChecker::is_keyword("class", "java").unwrap());
+        assert!(KeywordChecker::is_keyword("if", "bash").unwrap());
+        assert!(!KeywordChecker::is_keyword("unknown", "rust").unwrap());
+    }
+
+    #[test]
+    fn test_keyword_checker_is_keyword_enum() {
+        assert!(KeywordChecker::is_keyword_enum("fn", Language::Rust));
+        assert!(KeywordChecker::is_keyword_enum("class", Language::Java));
+        assert!(KeywordChecker::is_keyword_enum("if", Language::Bash));
+        assert!(!KeywordChecker::is_keyword_enum("unknown", Language::Rust));
+    }
+
+    #[test]
+    fn test_keyword_checker_unsupported_language() {
+        let result = KeywordChecker::is_keyword("test", "unsupported");
+        assert!(result.is_err());
+        assert!(result.unwrap_err().contains("Unsupported language"));
+    }
+
+    #[test]
+    fn test_keyword_checker_get_keywords() {
+        let rust_keywords = KeywordChecker::get_keywords("rust").unwrap();
+        assert!(rust_keywords.contains(&"fn"));
+        assert!(rust_keywords.contains(&"struct"));
+
+        let java_keywords = KeywordChecker::get_keywords("java").unwrap();
+        assert!(java_keywords.contains(&"class"));
+        assert!(java_keywords.contains(&"public"));
+
+        let bash_keywords = KeywordChecker::get_keywords("bash").unwrap();
+        assert!(bash_keywords.contains(&"if"));
+        assert!(bash_keywords.contains(&"then"));
+    }
+
+    #[test]
+    fn test_keyword_checker_supported_languages() {
+        let languages = KeywordChecker::supported_languages();
+        assert!(languages.contains(&"rust"));
+        assert!(languages.contains(&"java"));
+        assert!(languages.contains(&"bash"));
+        assert_eq!(languages.len(), 3);
+    }
+
+    #[test]
+    fn test_keyword_checker_check_multiple() {
+        let words = vec!["fn", "unknown", "struct"];
+        let result = KeywordChecker::check_multiple(&words, "rust").unwrap();
+
+        assert_eq!(result.get("fn"), Some(&true));
+        assert_eq!(result.get("unknown"), Some(&false));
+        assert_eq!(result.get("struct"), Some(&true));
+    }
+
+    #[test]
+    fn test_keyword_checker_check_multiple_unsupported_language() {
+        let words = vec!["test"];
+        let result = KeywordChecker::check_multiple(&words, "unsupported");
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_rust_specific_keywords() {
+        assert!(KeywordChecker::is_keyword("async", "rust").unwrap());
+        assert!(KeywordChecker::is_keyword("await", "rust").unwrap());
+        assert!(KeywordChecker::is_keyword("dyn", "rust").unwrap());
+        assert!(KeywordChecker::is_keyword("impl", "rust").unwrap());
+    }
+
+    #[test]
+    fn test_java_specific_keywords() {
+        assert!(KeywordChecker::is_keyword("synchronized", "java").unwrap());
+        assert!(KeywordChecker::is_keyword("instanceof", "java").unwrap());
+        assert!(KeywordChecker::is_keyword("extends", "java").unwrap());
+        assert!(KeywordChecker::is_keyword("implements", "java").unwrap());
+    }
+
+    #[test]
+    fn test_bash_specific_keywords() {
+        assert!(KeywordChecker::is_keyword("elif", "bash").unwrap());
+        assert!(KeywordChecker::is_keyword("esac", "bash").unwrap());
+        assert!(KeywordChecker::is_keyword("coproc", "bash").unwrap());
+    }
+}

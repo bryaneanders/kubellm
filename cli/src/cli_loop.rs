@@ -694,3 +694,83 @@ fn show_help() {
     println!("  prompt -p \"What is 2 + 2?\" -r anthropic -m claude-sonnet-4-20250514");
     println!("  get-models -r anthropic");
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_ctrl_c_state_new() {
+        let state = CtrlCState::new();
+        assert_eq!(state.last_time, None);
+        assert!(!state.showing_message);
+        assert!(!state.command_in_progress);
+        assert!(!state.interrupt_command);
+    }
+
+    #[test]
+    fn test_ctrl_c_state_default() {
+        let state = CtrlCState::default();
+        assert_eq!(state.last_time, None);
+        assert!(!state.showing_message);
+        assert!(!state.command_in_progress);
+        assert!(!state.interrupt_command);
+    }
+
+    #[test]
+    fn test_parse_quoted_args_empty() {
+        let result = parse_quoted_args("");
+        assert!(result.is_empty());
+    }
+
+    #[test]
+    fn test_parse_quoted_args_simple() {
+        let result = parse_quoted_args("hello world");
+        assert_eq!(result, vec!["hello", "world"]);
+    }
+
+    #[test]
+    fn test_parse_quoted_args_quoted() {
+        let result = parse_quoted_args("hello \"world with spaces\"");
+        assert_eq!(result, vec!["hello", "world with spaces"]);
+    }
+
+    #[test]
+    fn test_parse_quoted_args_escaped() {
+        let result = parse_quoted_args("\"hello\\nworld\"");
+        assert_eq!(result, vec!["hello\nworld"]);
+    }
+
+    #[test]
+    fn test_parse_quoted_args_complex() {
+        let result = parse_quoted_args("prompt -p \"What is 2 + 2?\" -r anthropic");
+        assert_eq!(
+            result,
+            vec!["prompt", "-p", "What is 2 + 2?", "-r", "anthropic"]
+        );
+    }
+
+    #[test]
+    fn test_parse_quoted_args_escaped_quote() {
+        let result = parse_quoted_args("\"He said \\\"hello\\\" to me\"");
+        assert_eq!(result, vec!["He said \"hello\" to me"]);
+    }
+
+    #[test]
+    fn test_parse_quoted_args_mixed_quotes() {
+        let result = parse_quoted_args("test \"quoted string\" normal");
+        assert_eq!(result, vec!["test", "quoted string", "normal"]);
+    }
+
+    #[test]
+    fn test_input_event_debug() {
+        let event = InputEvent::Command("test".to_string());
+        assert!(format!("{:?}", event).contains("Command"));
+
+        let event = InputEvent::CtrlC;
+        assert!(format!("{:?}", event).contains("CtrlC"));
+
+        let event = InputEvent::Exit;
+        assert!(format!("{:?}", event).contains("Exit"));
+    }
+}

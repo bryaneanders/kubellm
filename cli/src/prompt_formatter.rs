@@ -414,3 +414,136 @@ impl PromptFormatter {
         formatted_line.push_str(END_CODE_BLOCK_SECTION_ESC);
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_prompt_formatter_new() {
+        let formatter = PromptFormatter::new();
+        assert!(formatter.formatted_prompt.is_empty());
+        assert!(!formatter.bold_section);
+        assert!(!formatter.code_block_section);
+        assert!(!formatter.first_code_block_line);
+        assert_eq!(formatter.language, "");
+        assert!(!formatter.single_line_comment_section);
+        assert!(!formatter.multi_line_comment_section);
+        assert!(!formatter.code_block_double_quote_section);
+        assert!(!formatter.code_block_single_quote_section);
+        assert_eq!(formatter.width, DEFAULT_WIDTH);
+        assert_eq!(formatter.code_block_width, DEFAULT_WIDTH);
+    }
+
+    #[test]
+    fn test_prompt_formatter_default() {
+        let formatter = PromptFormatter::default();
+        assert!(formatter.formatted_prompt.is_empty());
+        assert_eq!(formatter.width, DEFAULT_WIDTH);
+    }
+
+    #[test]
+    fn test_format_prompt_simple() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("Hello world", 80);
+        assert_eq!(result.len(), 1);
+        assert_eq!(result[0], "Hello world");
+    }
+
+    #[test]
+    fn test_format_prompt_empty() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("", 80);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].is_empty());
+    }
+
+    #[test]
+    fn test_format_prompt_multiple_lines() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("Line 1\nLine 2\nLine 3", 80);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], "Line 1");
+        assert_eq!(result[1], "Line 2");
+        assert_eq!(result[2], "Line 3");
+    }
+
+    #[test]
+    fn test_format_prompt_with_bold() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("This is **bold** text", 80);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].contains(BOLD_TEXT_ESC));
+        assert!(result[0].contains(NON_BOLD_TEXT_ESC));
+    }
+
+    #[test]
+    fn test_format_prompt_with_code_block() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("```rust\nfn main() {}\n```", 80);
+        assert!(result.len() >= 2);
+        // Should contain code block formatting
+        let joined = result.join("");
+        assert!(joined.contains(START_CODE_BLOCK_SECTION_ESC));
+        assert!(joined.contains(END_CODE_BLOCK_SECTION_ESC));
+    }
+
+    #[test]
+    fn test_format_prompt_line_wrapping() {
+        let mut formatter = PromptFormatter::new();
+        let long_text = "This is a very long line that should be wrapped at the specified width because it exceeds the maximum characters per line limit";
+        let result = formatter.format_prompt(long_text, 40);
+        assert!(result.len() > 1);
+    }
+
+    #[test]
+    fn test_format_prompt_preserves_indentation() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("    Indented line", 80);
+        assert_eq!(result.len(), 1);
+        assert!(result[0].starts_with("    "));
+    }
+
+    #[test]
+    fn test_format_prompt_empty_lines() {
+        let mut formatter = PromptFormatter::new();
+        let result = formatter.format_prompt("Line 1\n\nLine 3", 80);
+        assert_eq!(result.len(), 3);
+        assert_eq!(result[0], "Line 1");
+        assert!(result[1].is_empty());
+        assert_eq!(result[2], "Line 3");
+    }
+
+    #[test]
+    fn test_format_prompt_reuse_formatter() {
+        let mut formatter = PromptFormatter::new();
+
+        let result1 = formatter.format_prompt("First text", 80);
+        assert_eq!(result1.len(), 1);
+
+        let result2 = formatter.format_prompt("Second text", 80);
+        assert_eq!(result2.len(), 1);
+        assert_eq!(result2[0], "Second text");
+    }
+
+    #[test]
+    fn test_debug_implementation() {
+        let formatter = PromptFormatter::new();
+        let debug_str = format!("{:?}", formatter);
+        assert!(debug_str.contains("PromptFormatter"));
+        assert!(debug_str.contains("formatted_prompt"));
+        assert!(debug_str.contains("bold_section"));
+    }
+
+    #[test]
+    fn test_determine_max_width() {
+        let mut formatter = PromptFormatter::new();
+        formatter.determine_max_width("Short");
+        assert_eq!(formatter.code_block_width, DEFAULT_WIDTH);
+
+        // Test with very long line that should increase width
+        let long_line = "a".repeat(100);
+        formatter.determine_max_width(&long_line);
+        assert!(formatter.code_block_width >= DEFAULT_WIDTH);
+    }
+}
