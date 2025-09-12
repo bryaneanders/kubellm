@@ -73,3 +73,77 @@ async fn main() -> Result<()> {
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use axum_test::TestServer;
+
+    #[tokio::test]
+    async fn test_serve_index() {
+        let response = serve_index().await;
+        let html_content = response.0;
+        assert!(html_content.contains("html"));
+    }
+
+    #[tokio::test]
+    async fn test_serve_prompts() {
+        let response = serve_prompts().await;
+        let html_content = response.0;
+        assert!(html_content.contains("html"));
+    }
+
+    #[tokio::test]
+    async fn test_serve_response() {
+        let response = serve_response().await;
+        let html_content = response.0;
+        assert!(html_content.contains("html"));
+    }
+
+    #[tokio::test]
+    async fn test_health_check() {
+        let response = health_check().await;
+        assert_eq!(response, "Web app is running!");
+    }
+
+    #[tokio::test]
+    async fn test_routes_without_database() {
+        let app = Router::new()
+            .route("/", get(serve_index))
+            .route("/prompts", get(serve_prompts))
+            .route("/response", get(serve_response))
+            .route("/health", get(health_check))
+            .layer(CorsLayer::permissive());
+
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.get("/health").await;
+        response.assert_status(StatusCode::OK);
+        response.assert_text("Web app is running!");
+
+        let response = server.get("/").await;
+        response.assert_status(StatusCode::OK);
+        response.assert_header("content-type", "text/html; charset=utf-8");
+
+        let response = server.get("/prompts").await;
+        response.assert_status(StatusCode::OK);
+        response.assert_header("content-type", "text/html; charset=utf-8");
+
+        let response = server.get("/response").await;
+        response.assert_status(StatusCode::OK);
+        response.assert_header("content-type", "text/html; charset=utf-8");
+    }
+
+    #[tokio::test]
+    async fn test_invalid_route() {
+        let app = Router::new()
+            .route("/health", get(health_check))
+            .layer(CorsLayer::permissive());
+
+        let server = TestServer::new(app).unwrap();
+
+        let response = server.get("/invalid").await;
+        response.assert_status(StatusCode::NOT_FOUND);
+    }
+}
