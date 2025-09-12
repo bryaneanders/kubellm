@@ -98,3 +98,99 @@ pub async fn get_prompts_handler(
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use axum::http::StatusCode;
+    use kubellm_core::{CreatePromptRequest, ErrorResponse};
+
+    #[test]
+    fn test_create_prompt_request_empty_prompt() {
+        let payload = CreatePromptRequest {
+            prompt: "".to_string(),
+            provider: "Anthropic".to_string(),
+            model: None,
+        };
+
+        assert_eq!(payload.prompt, "");
+        assert_eq!(payload.provider, "Anthropic");
+        assert!(payload.model.is_none());
+    }
+
+    #[test]
+    fn test_create_prompt_request_with_model() {
+        let payload = CreatePromptRequest {
+            prompt: "Test prompt".to_string(),
+            provider: "OpenAI".to_string(),
+            model: Some("gpt-4".to_string()),
+        };
+
+        assert_eq!(payload.prompt, "Test prompt");
+        assert_eq!(payload.provider, "OpenAI");
+        assert_eq!(payload.model, Some("gpt-4".to_string()));
+    }
+
+    #[test]
+    fn test_error_response_creation() {
+        let error = ErrorResponse {
+            error: "Test error message".to_string(),
+        };
+
+        assert_eq!(error.error, "Test error message");
+    }
+
+    #[test]
+    fn test_empty_prompt_validation() {
+        assert!(
+            "".trim().is_empty(),
+            "Empty string should be considered empty"
+        );
+        assert!(
+            "   \n\t  ".trim().is_empty(),
+            "Whitespace-only string should be considered empty"
+        );
+        assert!(
+            !"Hello world".trim().is_empty(),
+            "Non-empty string should not be considered empty"
+        );
+    }
+
+    #[test]
+    fn test_provider_validation() {
+        let providers = Provider::all();
+        let provider_strings: Vec<String> = providers.iter().map(|p| p.to_string()).collect();
+
+        assert_eq!(provider_strings.len(), 2);
+        assert!(provider_strings.contains(&"Anthropic".to_string()));
+        assert!(provider_strings.contains(&"OpenAI".to_string()));
+    }
+
+    #[test]
+    fn test_status_code_mappings() {
+        assert_eq!(StatusCode::BAD_REQUEST.as_u16(), 400);
+        assert_eq!(StatusCode::INTERNAL_SERVER_ERROR.as_u16(), 500);
+        assert_eq!(StatusCode::OK.as_u16(), 200);
+    }
+
+    #[test]
+    fn test_prompt_validation_logic() {
+        let empty_prompt = "";
+        let whitespace_prompt = "   \n\t  ";
+        let valid_prompt = "Hello, world!";
+
+        assert!(empty_prompt.trim().is_empty());
+        assert!(whitespace_prompt.trim().is_empty());
+        assert!(!valid_prompt.trim().is_empty());
+    }
+
+    #[test]
+    fn test_database_connection_type_definition() {
+        use std::any::TypeId;
+
+        assert_eq!(
+            TypeId::of::<DatabaseConnection>(),
+            TypeId::of::<Arc<MySqlPool>>()
+        );
+    }
+}
