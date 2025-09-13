@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kubellm
+  labels:
+    app.kubernetes.io/name: kubellm
+    app.kubernetes.io/version: "1.0.0"
+    pod-security.kubernetes.io/enforce: restricted
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/warn: restricted

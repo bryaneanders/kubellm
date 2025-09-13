@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+- ../../base
+
+namePrefix: dev-
+
+patchesStrategicMerge:
+- replica-patch.yaml
+- resource-patch.yaml
+
+configMapGenerator:
+- name: kubellm-config
+  behavior: merge
+  literals:
+  - LOG_LEVEL=debug
+  - DATABASE_URL=mysql://kubellm:password@dev-mysql:3306/kubellm_dev
+
+images:
+- name: kubellm-api
+  newTag: dev
+- name: kubellm-webapp
+  newTag: dev  
+- name: kubellm-cli
+  newTag: dev

@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubellm-config
+  namespace: kubellm
+data:
+  DATABASE_URL: "mysql://kubellm:password@mysql:3306/kubellm"
+  API_PORT: "8080"
+  WEBAPP_PORT: "3000"
+  LOG_LEVEL: "info"

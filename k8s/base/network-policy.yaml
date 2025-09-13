@@ -1,0 +1,134 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kubellm-network-policy
+  namespace: kubellm
+spec:
+  podSelector: {}
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: kubellm
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/part-of: kubellm
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: api-network-policy
+  namespace: kubellm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kubellm-api
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kubellm-webapp
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: mysql
+    ports:
+    - protocol: TCP
+      port: 3306
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: webapp-network-policy
+  namespace: kubellm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kubellm-webapp
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 3000
+  egress:
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kubellm-api
+    ports:
+    - protocol: TCP
+      port: 8080
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mysql-network-policy
+  namespace: kubellm
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mysql
+  policyTypes:
+  - Ingress
+  ingress:
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: kubellm-api
+    ports:
+    - protocol: TCP
+      port: 3306

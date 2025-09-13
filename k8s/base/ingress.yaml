@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: kubellm-ingress
+  namespace: kubellm
+  labels:
+    app.kubernetes.io/name: kubellm-ingress
+    app.kubernetes.io/part-of: kubellm
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  tls:
+  - hosts:
+    - api.kubellm.example.com
+    - app.kubellm.example.com
+    secretName: kubellm-tls
+  rules:
+  - host: api.kubellm.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kubellm-api
+            port:
+              number: 8080
+  - host: app.kubellm.example.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: kubellm-webapp
+            port:
+              number: 3000
