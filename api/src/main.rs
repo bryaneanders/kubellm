@@ -3,16 +3,34 @@ mod prompt;
 use crate::prompt::{create_prompt_handler, get_prompts_handler, get_providers_handler};
 use anyhow::{Context, Result};
 use axum::{
+    extract::State,
+    http::StatusCode,
+    response::Json,
     routing::{get, post},
     Router,
 };
 use kubellm_core::{create_database_pool, init_database};
 use prompts_api::{get_models_handler, ApiConfig};
+use serde_json::json;
+use sqlx::MySqlPool;
 use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
 async fn health_check() -> &'static str {
     "API is running!"
+}
+
+async fn readiness_check(
+    State(pool): State<Arc<MySqlPool>>,
+) -> Result<Json<serde_json::Value>, StatusCode> {
+    // Test database connection
+    match sqlx::query("SELECT 1").fetch_one(pool.as_ref()).await {
+        Ok(_) => Ok(Json(json!({
+            "status": "ready",
+            "database": "connected"
+        }))),
+        Err(_) => Err(StatusCode::SERVICE_UNAVAILABLE),
+    }
 }
 
 // Create a multi-threaded Tokio runtime for the api server
@@ -42,6 +60,7 @@ async fn main() -> Result<()> {
     // initialize app with routes
     let app = Router::new()
         .route("/health", get(health_check))
+        .route("/ready", get(readiness_check))
         .route("/prompt", post(create_prompt_handler))
         .route("/prompts", get(get_prompts_handler))
         .route("/get-models", get(get_models_handler))
@@ -62,6 +81,7 @@ async fn main() -> Result<()> {
     println!("📋 GET /prompts to view all prompts");
     println!("⚛️ GET /models to view a provider's models");
     println!("❤️ GET /health for health check");
+    println!("✅ GET /ready for readiness check");
 
     axum::serve(listener, app).await.context("Server error")?;
 
