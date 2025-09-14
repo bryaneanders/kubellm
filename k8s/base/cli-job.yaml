@@ -24,7 +24,7 @@ spec:
           type: RuntimeDefault
       containers:
       - name: cli
-        image: kubellm-cli:latest
+        image: ghcr.io/bryaneanders/kubellm-cli:latest
         imagePullPolicy: Always
         args: ["--help"]  # Default to show help, override at runtime
         env:
