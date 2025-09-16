@@ -28,13 +28,41 @@ spec:
         imagePullPolicy: Always
         args: ["--help"]  # Default to show help, override at runtime
         env:
-        - name: API_URL
-          value: "http://kubellm-api:8080"
-        - name: LOG_LEVEL
-          valueFrom:
-            configMapKeyRef:
-              name: kubellm-config
-              key: LOG_LEVEL
+          - name: DB_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: kubellm-config
+                key: DB_HOST
+          - name: DB_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: kubellm-config
+                key: DB_PORT
+          - name: DB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: kubellm-config
+                key: DB_NAME
+          - name: DB_USER
+            valueFrom:
+              configMapKeyRef:
+                name: kubellm-config
+                key: DB_USER
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: mysql-secret
+                key: DB_PASSWORD
+          - name: ANTHROPIC_KEY
+            valueFrom:
+              secretKeyRef:
+                name: api-keys
+                key: ANTHROPIC_KEY
+          - name: OPENAI_KEY
+            valueFrom:
+              secretKeyRef:
+                name: api-keys
+                key: OPENAI_KEY
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

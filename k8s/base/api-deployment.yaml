@@ -39,21 +39,46 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: DATABASE_URL
+        - name: DB_HOST
           valueFrom:
             configMapKeyRef:
               name: kubellm-config
-              key: DATABASE_URL
+              key: DB_HOST
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: kubellm-config
+              key: DB_PORT
+        - name: DB_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: kubellm-config
+              key: DB_NAME
+        - name: DB_USER
+          valueFrom:
+            configMapKeyRef:
+              name: kubellm-config
+              key: DB_USER
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: mysql-secret
+              key: DB_PASSWORD
+        - name: ANTHROPIC_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: ANTHROPIC_KEY
+        - name: OPENAI_KEY
+          valueFrom:
+            secretKeyRef:
+              name: api-keys
+              key: OPENAI_KEY
         - name: API_PORT
           valueFrom:
             configMapKeyRef:
               name: kubellm-config
               key: API_PORT
-        - name: LOG_LEVEL
-          valueFrom:
-            configMapKeyRef:
-              name: kubellm-config
-              key: LOG_LEVEL
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: true

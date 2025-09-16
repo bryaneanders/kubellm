@@ -18,9 +18,9 @@ configMapGenerator:
   - DATABASE_URL=mysql://kubellm:password@prod-mysql:3306/kubellm_prod
 
 images:
-- name: kubellm-api
+- name: ghcr.io/bryaneanders/kubellm-api:latest
   newTag: v1.0.0
-- name: kubellm-webapp
+- name: ghcr.io/bryaneanders/kubellm-webapp:latest
   newTag: v1.0.0
-- name: kubellm-cli
+- name: ghcr.io/bryaneanders/kubellm-cli:latest
   newTag: v1.0.0
