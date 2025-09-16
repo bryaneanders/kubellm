@@ -1,0 +1,74 @@
+x-common-variables: &common-variables
+  ANTHROPIC_KEY: ${ANTHROPIC_KEY:-}
+  DEFAULT_ANTHROPIC_MODEL: ${DEFAULT_ANTHROPIC_MODEL:-}
+  OPENAI_KEY: ${OPENAI_KEY:-}
+  DEFAULT_OPENAI_MODEL: ${DEFAULT_OPENAI_MODEL:-}
+  DB_HOST: mysql
+  DB_PORT: 3306
+  DB_NAME: kubellm
+  DB_USER: kubellm
+  DB_PASSWORD: modelme
+
+services:
+  kubellm-api:
+    image: ghcr.io/bryaneanders/kubellm-api:latest
+    environment:
+      <<: *common-variables
+      API_SERVER_HOST: kubellm-api
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 10s
+    ports:
+      - "3001:3001"
+  kubellm-webapp:
+    image: ghcr.io/bryaneanders/kubellm-webapp:latest
+    environment:
+      <<: *common-variables
+      API_SERVER_HOST: kubellm-webapp
+    depends_on:
+      mysql:
+        condition: service_healthy
+      kubellm-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 6
+      start_period: 10s
+    ports:
+      - "3000:3000"
+  kubellm-cli:
+    image: ghcr.io/bryaneanders/kubellm-cli:latest
+    environment:
+      <<: *common-variables
+      HISTORY_FILE_PATH: /tmp/.kubellm-cli-history
+    depends_on:
+      mysql:
+        condition: service_healthy
+  mysql:
+    image: mysql:latest
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+    healthcheck:
+      test: [ "CMD", "mysqladmin", "ping", "-h", "localhost" ]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+      start_period: 40s
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./init-scripts:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  mysql-data:
+
+networks:
+  app-network:
+    driver: bridge
