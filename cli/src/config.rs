@@ -27,8 +27,8 @@ impl CliConfig {
 
     pub fn get_history_file_path() -> PathBuf {
         dirs::home_dir()
-            .map(|home| home.join(".prompts-cli-history"))
-            .unwrap_or_else(|| PathBuf::from(".prompts-cli-history"))
+            .map(|home| home.join(".kubellm-cli-history"))
+            .unwrap_or_else(|| PathBuf::from(".kubellm-cli-history"))
     }
 }
 
@@ -40,7 +40,7 @@ mod tests {
     #[test]
     fn test_get_history_file_path() {
         let path = CliConfig::get_history_file_path();
-        assert!(path.to_string_lossy().contains(".prompts-cli-history"));
+        assert!(path.to_string_lossy().contains(".kubellm-cli-history"));
     }
 
     #[test]
@@ -58,7 +58,7 @@ mod tests {
         assert!(config
             .history_file_path
             .to_string_lossy()
-            .contains(".prompts-cli-history"));
+            .contains(".kubellm-cli-history"));
     }
 
     #[test]
