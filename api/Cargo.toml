@@ -1,5 +1,5 @@
 [package]
-name = "prompts-api"
+name = "kubellm-api"
 version = "0.1.0"
 edition = "2021"
 

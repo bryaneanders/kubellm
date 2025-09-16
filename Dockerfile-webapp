@@ -33,7 +33,7 @@ COPY webapp/static ./webapp/static
 WORKDIR /app/webapp
 
 # Build the APP binary
-RUN cargo build --release --bin prompts-webapp
+RUN cargo build --release --bin kubellm-webapp
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -41,6 +41,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -r -s /bin/false appuser
@@ -48,11 +49,11 @@ RUN useradd -r -s /bin/false appuser
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/webapp/target/release/prompts-webapp /usr/local/bin/prompts-webapp
+COPY --from=builder /app/webapp/target/release/kubellm-webapp /usr/local/bin/kubellm-webapp
 
-RUN chown root:root /usr/local/bin/prompts-webapp && \
-    chmod 755 /usr/local/bin/prompts-webapp
+RUN chown root:root /usr/local/bin/kubellm-webapp && \
+    chmod 755 /usr/local/bin/kubellm-webapp
 
 USER appuser
 
-ENTRYPOINT ["/usr/local/bin/prompts-webapp"]
+ENTRYPOINT ["/usr/local/bin/kubellm-webapp"]

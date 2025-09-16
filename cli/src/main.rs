@@ -1,4 +1,4 @@
-use prompts_cli::{
+use kubellm_cli::{
     crate_rustyline_background_loop, create_ctrlc_background_loop, main_loop, CtrlCState,
     InputEvent,
 };
