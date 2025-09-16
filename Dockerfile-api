@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     openssl \
     ca-certificates \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Use vendored OpenSSL to avoid cross-compilation issues
@@ -30,7 +29,7 @@ COPY api/src ./api/src
 WORKDIR /app/api
 
 # Build the API binary
-RUN cargo build --release --bin prompts-api
+RUN cargo build --release --bin kubellm-api
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -38,6 +37,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -r -s /bin/false appuser
@@ -45,11 +45,11 @@ RUN useradd -r -s /bin/false appuser
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/api/target/release/prompts-api /usr/local/bin/prompts-api
+COPY --from=builder /app/api/target/release/kubellm-api /usr/local/bin/kubellm-api
 
-RUN chown root:root /usr/local/bin/prompts-api && \
-    chmod 755 /usr/local/bin/prompts-api
+RUN chown root:root /usr/local/bin/kubellm-api && \
+    chmod 755 /usr/local/bin/kubellm-api
 
 USER appuser
 
-ENTRYPOINT ["/usr/local/bin/prompts-api"]
+ENTRYPOINT ["/usr/local/bin/kubellm-api"]

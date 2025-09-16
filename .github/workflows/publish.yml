@@ -65,13 +65,13 @@ jobs:
         esac
     
     - name: Build CLI
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-cli
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-cli
     
     - name: Build API
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-api
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-api
     
     - name: Build WebApp
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-webapp
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-webapp
     
     - name: Create artifact directory
       run: mkdir -p artifacts
@@ -79,13 +79,13 @@ jobs:
     - name: Copy binaries and add extensions
       run: |
         if [[ "${{ matrix.target }}" == *"windows"* ]]; then
-          cp target/${{ matrix.target }}/release/prompts-cli.exe artifacts/prompts-cli-${{ matrix.target }}.exe
-          cp target/${{ matrix.target }}/release/prompts-api.exe artifacts/prompts-api-${{ matrix.target }}.exe
-          cp target/${{ matrix.target }}/release/prompts-webapp.exe artifacts/prompts-webapp-${{ matrix.target }}.exe
+          cp target/${{ matrix.target }}/release/kubellm-cli.exe artifacts/kubellm-cli-${{ matrix.target }}.exe
+          cp target/${{ matrix.target }}/release/kubellm-api.exe artifacts/kubellm-api-${{ matrix.target }}.exe
+          cp target/${{ matrix.target }}/release/kubellm-webapp.exe artifacts/kubellm-webapp-${{ matrix.target }}.exe
         else
-          cp target/${{ matrix.target }}/release/prompts-cli artifacts/prompts-cli-${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/prompts-api artifacts/prompts-api-${{ matrix.target }}
-          cp target/${{ matrix.target }}/release/prompts-webapp artifacts/prompts-webapp-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/kubellm-cli artifacts/kubellm-cli-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/kubellm-api artifacts/kubellm-api-${{ matrix.target }}
+          cp target/${{ matrix.target }}/release/kubellm-webapp artifacts/kubellm-webapp-${{ matrix.target }}
         fi
     
     - name: Create checksums
@@ -138,22 +138,22 @@ jobs:
         targets: ${{ matrix.target }}
     
     - name: Build CLI
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-cli
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-cli
     
     - name: Build API
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-api
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-api
     
     - name: Build WebApp
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-webapp
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-webapp
     
     - name: Create artifact directory
       run: mkdir -p artifacts
     
     - name: Copy binaries
       run: |
-        cp target/${{ matrix.target }}/release/prompts-cli artifacts/prompts-cli-${{ matrix.target }}
-        cp target/${{ matrix.target }}/release/prompts-api artifacts/prompts-api-${{ matrix.target }}
-        cp target/${{ matrix.target }}/release/prompts-webapp artifacts/prompts-webapp-${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/kubellm-cli artifacts/kubellm-cli-${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/kubellm-api artifacts/kubellm-api-${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/kubellm-webapp artifacts/kubellm-webapp-${{ matrix.target }}
     
     - name: Create checksums
       run: |
@@ -211,9 +211,9 @@ jobs:
           🚀 **Automated Release from Main Branch**
           
           This release contains pre-built binaries for:
-          - **CLI Tool** (`prompts-cli`)
-          - **API Server** (`prompts-api`) 
-          - **Web Application** (`prompts-webapp`)
+          - **CLI Tool** (`kubellm-cli`)
+          - **API Server** (`kubellm-api`) 
+          - **Web Application** (`kubellm-webapp`)
           
           ### Supported Platforms:
           - Linux (x86_64)
@@ -228,13 +228,13 @@ jobs:
           
           ### Installation:
           1. Download the appropriate binary for your platform
-          2. Make it executable: `chmod +x prompts-cli-<target>`
-          3. Move to your PATH: `mv prompts-cli-<target> /usr/local/bin/prompts-cli`
+          2. Make it executable: `chmod +x kubellm-cli-<target>`
+          3. Move to your PATH: `mv kubellm-cli-<target> /usr/local/bin/kubellm-cli`
           
           ### Verification:
           Each binary includes a `.sha256` file for integrity verification:
           ```bash
-          sha256sum -c prompts-cli-<target>.sha256
+          sha256sum -c kubellm-cli-<target>.sha256
           ```
           
           **Commit**: ${{ github.sha }}

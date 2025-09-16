@@ -99,22 +99,22 @@ jobs:
       run: sudo apt-get update && sudo apt-get install -y musl-tools
     
     - name: Build CLI
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-cli
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-cli
     
     - name: Build API
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-api
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-api
     
     - name: Build WebApp
-      run: cargo build --release --target ${{ matrix.target }} --bin prompts-webapp
+      run: cargo build --release --target ${{ matrix.target }} --bin kubellm-webapp
     
     - name: Create artifact directory
       run: mkdir -p artifacts
     
     - name: Copy binaries
       run: |
-        cp target/${{ matrix.target }}/release/prompts-cli artifacts/prompts-cli-${{ matrix.target }}
-        cp target/${{ matrix.target }}/release/prompts-api artifacts/prompts-api-${{ matrix.target }}
-        cp target/${{ matrix.target }}/release/prompts-webapp artifacts/prompts-webapp-${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/kubellm-cli artifacts/kubellm-cli-${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/kubellm-api artifacts/kubellm-api-${{ matrix.target }}
+        cp target/${{ matrix.target }}/release/kubellm-webapp artifacts/kubellm-webapp-${{ matrix.target }}
     
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
