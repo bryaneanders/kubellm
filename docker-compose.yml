@@ -1,0 +1,34 @@
+services:
+  kubellm-api:
+    image: ghcr.io/bryaneanders/kubellm-api:latest
+    environment:
+      - AHTHROPIC_KEY=${{ secrets.AHTHROPIC_KEY }}
+      - DEFAULT_ANTHROPIC_MODEL=${{ secrets.DEFAULT_ANTHROPIC_MODEL }}
+      - OPENAI_KEY=${{ secrets.OPENAI_KEY }}
+      - DEFAULT_OPENAI_MODEL=${{ secrets.DEFAULT_OPENAI_MODEL }}
+  kubellm-webapp:
+    image: ghcr.io/bryaneanders/kubellm-webapp:latest
+    environment:
+      - AHTHROPIC_KEY=${{ secrets.AHTHROPIC_KEY }}
+      - DEFAULT_ANTHROPIC_MODEL=${{ secrets.DEFAULT_ANTHROPIC_MODEL }}
+      - OPENAI_KEY=${{ secrets.OPENAI_KEY }}
+      - DEFAULT_OPENAI_MODEL=${{ secrets.DEFAULT_OPENAI_MODEL }}
+  kubellm-cli:
+    image: ghcr.io/bryaneanders/kubellm-cli:latest
+    environment:
+      - AHTHROPIC_KEY=${{ secrets.AHTHROPIC_KEY }}
+      - DEFAULT_ANTHROPIC_MODEL=${{ secrets.DEFAULT_ANTHROPIC_MODEL }}
+      - OPENAI_KEY=${{ secrets.OPENAI_KEY }}
+      - DEFAULT_OPENAI_MODEL=${{ secrets.DEFAULT_OPENAI_MODEL }}
+  database:
+    image: mysql:latest
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./mysql/init:/docker-entrypoint-initdb.d:ro
+
+volumes:
+  mysql-data:
+
+networks:
+  app-network:
+    driver: bridge
