@@ -6,21 +6,36 @@ resources:
 
 namePrefix: prod-
 
-patchesStrategicMerge:
-- replica-patch.yaml
-- resource-patch.yaml
 
-configMapGenerator:
-- name: kubellm-config
-  behavior: merge
-  literals:
-  - LOG_LEVEL=warn
-  - DATABASE_URL=mysql://kubellm:password@prod-mysql:3306/kubellm_prod
+#configMapGenerator:
+#- behavior: replace
+#  literals:
+#  - LOG_LEVEL=warn
+#  - DATABASE_URL=mysql://kubellm:password@prod-mysql:3306/kubellm_prod
+#  name: kubellm-config
 
 images:
-- name: ghcr.io/bryaneanders/kubellm-api:latest
-  newTag: v1.0.0
-- name: ghcr.io/bryaneanders/kubellm-webapp:latest
-  newTag: v1.0.0
-- name: ghcr.io/bryaneanders/kubellm-cli:latest
-  newTag: v1.0.0
+- name: ghcr.io/bryaneanders/kubellm-api
+  newTag: latest
+- name: ghcr.io/bryaneanders/kubellm-webapp
+  newTag: latest
+- name: ghcr.io/bryaneanders/kubellm-cli
+  newTag: latest
+
+patches:
+- path: replica-patch-api.yaml
+  target:
+    kind: Deployment
+    name: kubellm-api
+- path: replica-patch-webapp.yaml
+  target:
+    kind: Deployment
+    name: kubellm-webapp
+- path: resource-patch-api.yaml
+  target:
+    kind: Deployment
+    name: kubellm-api
+- path: resource-patch-webapp.yaml
+  target:
+    kind: Deployment
+    name: kubellm-webapp

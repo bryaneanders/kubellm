@@ -4,10 +4,10 @@ metadata:
   name: kubellm-config
   namespace: kubellm
 data:
-  DB_HOST: mysql
-  DB_PORT: 3306
-  DB_NAME: kubellm
-  DB_USER: kubellm
+  DB_HOST: "mysql"
+  DB_PORT: "3306"
+  DB_NAME: "kubellm"
+  DB_USER: "kubellm"
   API_PORT: "3000"
   API_URL: "http://kubellm-api:3000"
   WEBAPP_PORT: "3000"

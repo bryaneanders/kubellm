@@ -14,15 +14,19 @@ resources:
 - cli-job.yaml
 - ingress.yaml
 - network-policy.yaml
+- api-keys-secret.yaml
 
-commonLabels:
-  app.kubernetes.io/instance: kubellm
-  app.kubernetes.io/managed-by: kustomize
 
 images:
-- name: kubellm-api
+- name: ghcr.io/bryaneanders/kubellm-api
   newTag: latest
-- name: kubellm-webapp  
+- name: ghcr.io/bryaneanders/kubellm-webapp
   newTag: latest
-- name: kubellm-cli
+- name: ghcr.io/bryaneanders/kubellm-cli
   newTag: latest
+
+labels:
+- includeSelectors: true
+  pairs:
+    app.kubernetes.io/instance: kubellm
+    app.kubernetes.io/managed-by: kustomize
