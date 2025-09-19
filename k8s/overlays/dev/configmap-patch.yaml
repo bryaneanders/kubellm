@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kubellm-config
+data:
+  DB_HOST: "dev-mysql"
+  API_URL: "http://dev-kubellm-api:3000"

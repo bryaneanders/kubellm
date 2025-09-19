@@ -23,6 +23,10 @@ images:
   newTag: latest
 
 patches:
+- path: mysql-configmap-patch.yaml
+  target:
+    kind: StatefulSet
+    name: mysql
 - path: replica-patch-api.yaml
   target:
     kind: Deployment
@@ -39,3 +43,16 @@ patches:
   target:
     kind: Deployment
     name: kubellm-webapp
+- path: secret-ref-patch-api.yaml
+  target:
+    kind: Deployment
+    name: kubellm-api
+- path: secret-ref-patch-webapp.yaml
+  target:
+    kind: Deployment
+    name: kubellm-webapp
+- path: configmap-patch.yaml
+  target:
+    kind: ConfigMap
+    name: kubellm-config
+

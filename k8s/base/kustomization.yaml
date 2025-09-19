@@ -5,6 +5,7 @@ resources:
 - namespace.yaml
 - configmap.yaml
 - mysql-secret.yaml
+- mysql-init-scripts.yaml
 - mysql-statefulset.yaml
 - mysql-service.yaml
 - api-deployment.yaml

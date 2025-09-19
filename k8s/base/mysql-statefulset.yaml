@@ -27,18 +27,34 @@ spec:
         fsGroup: 999
         seccompProfile:
           type: RuntimeDefault
+      initContainers:
+        - name: mysql-init
+          image: mysql:8.0
+          command: [ 'sh', '-c', 'cp /scripts/* /docker-entrypoint-initdb.d/' ]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            runAsNonRoot: true
+            runAsUser: 999  # mysql user
+            runAsGroup: 999
+            seccompProfile:
+              type: RuntimeDefault
+          volumeMounts:
+            - name: init-scripts
+              mountPath: /scripts
+            - name: init-db
+              mountPath: /docker-entrypoint-initdb.d
       containers:
       - name: mysql
         image: mysql:8.0
         ports:
         - containerPort: 3306
           name: mysql
+
+
         env:
-        - name: MYSQL_ROOT_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secret
-              key: root-password
         - name: MYSQL_DATABASE
           value: kubellm
         - name: MYSQL_USER
@@ -47,12 +63,15 @@ spec:
           valueFrom:
             secretKeyRef:
               name: mysql-secret
-              key: user-password
+              key: DB_PASSWORD
+        - name: MYSQL_RANDOM_ROOT_PASSWORD
+          value: "true"
         securityContext:
           allowPrivilegeEscalation: false
           readOnlyRootFilesystem: false
           runAsNonRoot: true
           runAsUser: 999
+          runAsGroup: 999
           capabilities:
             drop:
             - ALL
@@ -76,25 +95,29 @@ spec:
         readinessProbe:
           exec:
             command:
-            - mysql
-            - -h
-            - localhost
-            - -u
-            - kubellm
-            - -p$(MYSQL_PASSWORD)
-            - -e
-            - "SELECT 1"
+              - bash
+              - -c
+              - mysql -u kubellm -p$MYSQL_PASSWORD -e "SELECT 1"
           initialDelaySeconds: 30
           periodSeconds: 10
-          timeoutSeconds: 5
         volumeMounts:
         - name: mysql-data
           mountPath: /var/lib/mysql
         - name: tmp
           mountPath: /tmp
+        - name: init-scripts
+          mountPath: /scripts
+        - name: init-db
+          mountPath: /docker-entrypoint-initdb.d
+
       volumes:
       - name: tmp
         emptyDir: {}
+      - name: init-scripts
+        configMap:
+          name: mysql-init-scripts
+      - name: init-db
+        emptyDir: { }
   volumeClaimTemplates:
   - metadata:
       name: mysql-data

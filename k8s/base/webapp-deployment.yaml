@@ -39,7 +39,12 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: WEBAPP_PORT
+        - name: APP_SERVER_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: kubellm-config
+              key: APP_SERVER_HOST
+        - name: SERVER_PORT
           valueFrom:
             configMapKeyRef:
               name: kubellm-config

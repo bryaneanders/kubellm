@@ -9,6 +9,8 @@ data:
   DB_NAME: "kubellm"
   DB_USER: "kubellm"
   API_PORT: "3000"
+  API_SERVER_HOST: "0.0.0.0"
   API_URL: "http://kubellm-api:3000"
+  APP_SERVER_HOST: "0.0.0.0"
   WEBAPP_PORT: "3000"
   LOG_LEVEL: "info"

@@ -1,0 +1,11 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mysql
+spec:
+  template:
+    spec:
+      volumes:
+        - name: init-scripts
+          configMap:
+            name: dev-mysql-init-scripts  # Use the prefixed name
