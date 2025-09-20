@@ -47,6 +47,10 @@ patches:
   target:
     kind: Deployment
     name: kubellm-api
+- path: secret-ref-patch-cli.yaml
+  target:
+    kind: Job
+    name: kubellm-cli
 - path: secret-ref-patch-webapp.yaml
   target:
     kind: Deployment
