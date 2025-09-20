@@ -3,6 +3,7 @@ x-common-variables: &common-variables
   DEFAULT_ANTHROPIC_MODEL: ${DEFAULT_ANTHROPIC_MODEL:-}
   OPENAI_KEY: ${OPENAI_KEY:-}
   DEFAULT_OPENAI_MODEL: ${DEFAULT_OPENAI_MODEL:-}
+  API_SERVER_HOST: kubellm-webapp
   DB_HOST: mysql
   DB_PORT: 3306
   DB_NAME: kubellm
@@ -19,7 +20,7 @@ services:
       mysql:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
+      test: ["CMD", "curl", "-f", "http://kubellm-api:3001/health"]
       interval: 15s
       timeout: 10s
       retries: 6
@@ -30,14 +31,14 @@ services:
     image: ghcr.io/bryaneanders/kubellm-webapp:latest
     environment:
       <<: *common-variables
-      API_SERVER_HOST: kubellm-webapp
+      APP_SERVER_HOST: kubellm-webapp
     depends_on:
       mysql:
         condition: service_healthy
       kubellm-api:
         condition: service_healthy
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
+      test: ["CMD", "curl", "-f", "http://kubellm-webapp:3000/"]
       interval: 15s
       timeout: 10s
       retries: 6
@@ -46,6 +47,7 @@ services:
       - "3000:3000"
   kubellm-cli:
     image: ghcr.io/bryaneanders/kubellm-cli:latest
+    command: sleep infinity
     environment:
       <<: *common-variables
       HISTORY_FILE_PATH: /tmp/.kubellm-cli-history

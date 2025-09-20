@@ -9,8 +9,8 @@ use axum::{
     routing::{get, post},
     Router,
 };
+use kubellm_api::{get_models_handler, ApiConfig};
 use kubellm_core::{create_database_pool, init_database};
-use prompts_api::{get_models_handler, ApiConfig};
 use serde_json::json;
 use sqlx::MySqlPool;
 use std::sync::Arc;

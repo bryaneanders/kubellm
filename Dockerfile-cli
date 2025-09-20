@@ -10,7 +10,6 @@ RUN apt-get update && apt-get install -y \
     libssl3 \
     openssl \
     ca-certificates \
-    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # Use vendored OpenSSL to avoid cross-compilation issues
@@ -29,7 +28,7 @@ COPY cli/src ./cli/src
 WORKDIR /app/cli
 
 # Build the CLI binary
-RUN cargo build --release --bin prompts-cli
+RUN cargo build --release --bin kubellm-cli
 
 # Runtime stage
 FROM debian:bookworm-slim
@@ -37,6 +36,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -r -s /bin/false appuser
@@ -44,13 +44,13 @@ RUN useradd -r -s /bin/false appuser
 WORKDIR /app
 
 # Copy the binary from builder stage
-COPY --from=builder /app/cli/target/release/prompts-cli /usr/local/bin/prompts-cli
+COPY --from=builder /app/cli/target/release/kubellm-cli /usr/local/bin/kubellm-cli
 
-RUN chown root:root /usr/local/bin/prompts-cli && \
-    chmod 755 /usr/local/bin/prompts-cli
+RUN chown root:root /usr/local/bin/kubellm-cli && \
+    chmod 755 /usr/local/bin/kubellm-cli
 
 RUN mkdir /data && chown appuser:appuser /data
 
 USER appuser
 
-ENTRYPOINT ["/usr/local/bin/prompts-cli"]
+CMD ["/usr/local/bin/kubellm-cli"]
